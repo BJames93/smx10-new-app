@@ -55,6 +55,8 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🚗 Alta de Conductores", "🚛 
 # ==========================================
 with tab1:
     with st.form("form_conductor", clear_on_submit=True):
+        
+        st.subheader("📝 Datos Generales")
         col1, col2 = st.columns(2)
         with col1:
             nombre = st.text_input("Nombre Completo *")
@@ -68,28 +70,35 @@ with tab1:
             # max_chars=18 impide físicamente que se escriban más de 18 dígitos
             clabe = st.text_input("Clabe Interbancaria", max_chars=18, help="La CLABE debe tener exactamente 18 dígitos numéricos.")
         
-        # Reorganización para equilibrar el espacio visual
+        st.divider() # Agrega una línea sutil de separación
+        
+        st.subheader("📁 Expediente Digital")
+        # Cuadrícula perfecta de 3x3 agrupada por tipo de documento
         c1, c2, c3 = st.columns(3)
+        
         with c1:
+            st.markdown("**Identidad**")
             f_foto = st.file_uploader("Foto")
-            f_curp = st.file_uploader("CURP")
-        with c2:
             f_ine = st.file_uploader("INE")
-            f_fis = st.file_uploader("Constancia Fiscal")
-        with c3:
+            f_curp = st.file_uploader("CURP")
+            
+        with c2:
+            st.markdown("**Operación y Control**")
             f_lic = st.file_uploader("Licencia")
+            f_tox = st.file_uploader("Toxicológico")
+            f_ref = st.file_uploader("Carta de Referencia")
+            
+        with c3:
+            st.markdown("**Fiscal y Bancario**")
+            f_fis = st.file_uploader("Constancia Fiscal")
             f_dom = st.file_uploader("Domicilio")
             f_ban = st.file_uploader("Banco (Archivo)") 
         
-        # Nueva fila o sección inferior para los restantes
-        c4, c5, c6 = st.columns(3)
-        with c4:
-            f_tox = st.file_uploader("Toxicológico")
-       
-        with c6:
-            f_ref = st.file_uploader("Carta de Referencia")
-            
+        st.divider()
+        
+        # El botón se alinea automáticamente
         enviar = st.form_submit_button("Guardar Conductor")
+        
         if enviar:
             if not nombre or not rfc:
                 st.error("Por favor completa los campos obligatorios (Nombre y RFC)")
@@ -110,7 +119,7 @@ with tab1:
                     "rfc": rfc.upper(), 
                     "correo": correo, 
                     "celular": celular,
-                    "nombre_banco": banco,           
+                    "nombre_banco": banco,             
                     "clabe_interbancaria": clabe,    
                     "url_fotografia": procesar_archivo(f_foto, "conductores/fotos", rfc),
                     "url_curp": procesar_archivo(f_curp, "conductores/curps", rfc),
@@ -120,7 +129,6 @@ with tab1:
                     "url_comprobante_domicilio": procesar_archivo(f_dom, "conductores/domicilios", rfc),
                     "url_caratula_bancaria": procesar_archivo(f_ban, "conductores/bancos", rfc),
                     "url_toxicologico": procesar_archivo(f_tox, "conductores/toxicologicos", rfc),
- 
                 }
                 try:
                     supabase.table("alta_conductor").insert(datos).execute()
