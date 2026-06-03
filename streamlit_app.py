@@ -72,10 +72,8 @@ with tab1:
         c1, c2, c3 = st.columns(3)
         with c1:
             f_foto = st.file_uploader("Foto")
-            f_acta = st.file_uploader("Acta")
             f_curp = st.file_uploader("CURP")
         with c2:
-            f_nss = st.file_uploader("NSS")
             f_ine = st.file_uploader("INE")
             f_fis = st.file_uploader("Constancia Fiscal")
         with c3:
@@ -87,8 +85,7 @@ with tab1:
         c4, c5, c6 = st.columns(3)
         with c4:
             f_tox = st.file_uploader("Toxicológico")
-        with c5:
-            f_est = st.file_uploader("Comprobante de Estudios")
+       
         with c6:
             f_ref = st.file_uploader("Carta de Referencia")
             
@@ -116,17 +113,14 @@ with tab1:
                     "nombre_banco": banco,           
                     "clabe_interbancaria": clabe,    
                     "url_fotografia": procesar_archivo(f_foto, "conductores/fotos", rfc),
-                    "url_acta_nacimiento": procesar_archivo(f_acta, "conductores/actas", rfc),
                     "url_curp": procesar_archivo(f_curp, "conductores/curps", rfc),
-                    "url_seguro_social": procesar_archivo(f_nss, "conductores/nss", rfc),
                     "url_ine": procesar_archivo(f_ine, "conductores/ines", rfc),
                     "url_constancia_fiscal": procesar_archivo(f_fis, "conductores/fiscal", rfc),
                     "url_licencia": procesar_archivo(f_lic, "conductores/licencias", rfc),
                     "url_comprobante_domicilio": procesar_archivo(f_dom, "conductores/domicilios", rfc),
                     "url_caratula_bancaria": procesar_archivo(f_ban, "conductores/bancos", rfc),
                     "url_toxicologico": procesar_archivo(f_tox, "conductores/toxicologicos", rfc),
-                    "url_comprobante_estudios": procesar_archivo(f_est, "conductores/estudios", rfc),
-                    "url_carta_referencia": procesar_archivo(f_ref, "conductores/referencias", rfc)
+ 
                 }
                 try:
                     supabase.table("alta_conductor").insert(datos).execute()
@@ -313,12 +307,11 @@ with tab4:
                         with c2:
                             st.write("### Documentación Digital")
                             docs = {
-                                "Acta de Nacimiento": "url_acta_nacimiento", "CURP": "url_curp",
-                                "Seguro Social (NSS)": "url_seguro_social", "INE": "url_ine",
+                                "CURP": "url_curp",
+                                "INE": "url_ine",
                                 "Constancia Fiscal": "url_constancia_fiscal", "Licencia de Conducir": "url_licencia",
                                 "Comprobante Domicilio": "url_comprobante_domicilio", "Carátula Bancaria": "url_caratula_bancaria",
-                                "Examen Toxicológico": "url_toxicologico", "Comprobante de Estudios": "url_comprobante_estudios",
-                                "Carta de Referencia": "url_carta_referencia"
+                                "Examen Toxicológico": "url_toxicologico"
                             }
                             
                             # Diccionario para almacenar solo los enlaces válidos
@@ -416,12 +409,11 @@ with tab5:
             st.write("---")
             st.write("Estado de documentos actuales:")
             docs_map = {
-                "Acta de Nacimiento": "url_acta_nacimiento", "CURP": "url_curp",
-                "Seguro Social (NSS)": "url_seguro_social", "INE": "url_ine",
+                "CURP": "url_curp",
+                "INE": "url_ine",
                 "Constancia Fiscal": "url_constancia_fiscal", "Licencia de Conducir": "url_licencia",
                 "Comprobante Domicilio": "url_comprobante_domicilio", "Carátula Bancaria": "url_caratula_bancaria",
-                "Examen Toxicológico": "url_toxicologico", "Comprobante de Estudios": "url_comprobante_estudios",
-                "Carta de Referencia": "url_carta_referencia"
+                "Examen Toxicológico": "url_toxicologico"
             }
             cols = st.columns(3)
             for i, (nombre, key) in enumerate(docs_map.items()):
