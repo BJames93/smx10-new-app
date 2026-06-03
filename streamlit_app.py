@@ -2,7 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 
 # 1. Configuración de la página
-st.set_page_config(page_title="Mi Nueva App", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="Plataforma SMX10", page_icon="🚀", layout="wide")
 
 # 2. Función para conectar a Supabase (usamos caché para no saturar la conexión)
 @st.cache_resource
