@@ -2,53 +2,80 @@ import streamlit as st
 from supabase import create_client, Client
 from datetime import datetime
 import pandas as pd
-import unicodedata # <--- Importante para limpiar acentos
+import unicodedata 
 import io
 import zipfile
 import requests
 
-# --- 1. CONFIGURACIÓN E INICIALIZACIÓN DE CREDENCIALES ---
+# --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 SUPABASE_URL = "https://sinepuhjujazcaelrqms.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpbmVwdWhqdWphemNhZWxycW1zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTgwMDIsImV4cCI6MjA5NTk3NDAwMn0.RoTKaHzfbFViuiNOgMirfws0Pd13nCivAhxDoq_ipJM"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 BUCKET_NAME = "documentos_operacion"
 
-# Función para limpiar caracteres especiales (acentos, ñ, espacios)
+# --- LÓGICA DE LOGIN ---
+def check_password():
+    def password_entered():
+        # Obtenemos los usuarios desde los secretos de Streamlit
+        users = {
+            st.secrets["USER_1"].split(":")[0]: st.secrets["USER_1"].split(":")[1],
+            st.secrets["USER_2"].split(":")[0]: st.secrets["USER_2"].split(":")[1],
+        }
+        
+        if st.session_state["username"] in users and st.session_state["password"] == users[st.session_state["username"]]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.text_input("Usuario", key="username")
+        st.text_input("Contraseña", type="password", key="password", on_change=password_entered)
+        return False
+    elif not st.session_state["password_correct"]:
+        st.text_input("Usuario", key="username")
+        st.text_input("Contraseña", type="password", key="password", on_change=password_entered)
+        st.error("❌ Usuario o contraseña incorrectos")
+        return False
+    else:
+        return True
+
+# Bloque de seguridad: Si no hay login, se detiene la app
+if not check_password():
+    st.stop()
+
+# --- FUNCIONES DE APOYO ---
 def limpiar_texto(texto):
-    # Elimina acentos (ej: á -> a)
     nfkd_form = unicodedata.normalize('NFKD', texto)
     solo_ascii = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
-    # Cambia espacios y caracteres raros por guiones bajos, quita ñ
     return solo_ascii.replace(" ", "_").replace("ñ", "n").replace("Ñ", "N")
 
-# Función mejorada para subir a Storage
 def procesar_archivo(archivo, carpeta, identificador):
     if archivo is not None:
         try:
-            # Limpiamos nombres para evitar error InvalidKey
             nombre_limpio = limpiar_texto(archivo.name)
             carpeta_limpia = limpiar_texto(carpeta)
-            
             ruta = f"{carpeta_limpia}/{identificador}_{nombre_limpio}"
-            
-            # Subimos con upsert="true" para evitar el error de archivo duplicado
             supabase.storage.from_(BUCKET_NAME).upload(
                 path=ruta, 
                 file=archivo.getvalue(), 
                 file_options={"content-type": archivo.type, "upsert": "true"}
             )
             return supabase.storage.from_(BUCKET_NAME).get_public_url(ruta)
-            
         except Exception as e:
             st.error(f"Error en {archivo.name}: {e}")
             return None
     return None
 
-# --- INTERFAZ ---
+# --- INTERFAZ PRINCIPAL ---
 st.set_page_config(page_title="Plataforma SMX10", page_icon="🚀", layout="wide")
 st.title("📊 Sistema Centralizado SVC: SMX10")
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🚗 Alta de Conductores", "🚛 Control de Unidades", "📋 Registro de Operación","🔍 Consulta Integral","🔄 Actualización de Expedientes","📊 Verificación de Captura"])
+
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "🚗 Alta de Conductores", "🚛 Control de Unidades", "📋 Registro de Operación",
+    "🔍 Consulta Integral", "🔄 Actualización de Expedientes", "📊 Verificación de Captura"
+])
 
 # ==========================================
 # PESTAÑA 1: ALTA DE CONDUCTOR
