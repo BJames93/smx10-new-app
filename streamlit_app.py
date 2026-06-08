@@ -14,19 +14,23 @@ SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 BUCKET_NAME = "documentos_operacion"
 
-# --- LÓGICA DE LOGIN ---
+# --- LÓGICA DE LOGIN CON SUPABASE ---
 def check_password():
     def password_entered():
-        # Obtenemos los usuarios desde los secretos de Streamlit
-        users = {
-            st.secrets["USER_1"].split(":")[0]: st.secrets["USER_1"].split(":")[1],
-            st.secrets["USER_2"].split(":")[0]: st.secrets["USER_2"].split(":")[1],
-        }
+        input_user = st.session_state["username"]
+        input_pass = st.session_state["password"]
         
-        if st.session_state["username"] in users and st.session_state["password"] == users[st.session_state["username"]]:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-        else:
+        try:
+            # Consultamos la tabla de usuarios en Supabase
+            res = supabase.table("usuarios_acceso").select("*").eq("nombre_usuario", input_user).eq("contrasena", input_pass).execute()
+            
+            if len(res.data) > 0:
+                st.session_state["password_correct"] = True
+                del st.session_state["password"]  # Por seguridad
+            else:
+                st.session_state["password_correct"] = False
+        except Exception as e:
+            st.error(f"Error de conexión con la base de datos: {e}")
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
@@ -72,35 +76,78 @@ def procesar_archivo(archivo, carpeta, identificador):
 st.set_page_config(page_title="Plataforma SMX10", page_icon="🚀", layout="wide")
 st.title("📊 Sistema Centralizado SVC: SMX10")
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "🚗 Alta de Conductores", "🚛 Control de Unidades", "📋 Registro de Operación",
-    "🔍 Consulta Integral", "🔄 Actualización de Expedientes", "📊 Verificación de Captura"
+# Reordenamiento de Tabs
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "🏢 Registro de Empresa", "🚗 Alta Conductor", "🚛 Control de Unidades", 
+    "🔍 Consulta Integral", "🔄 Actualización de Expedientes", 
+    "📋 Registro de Operaciones", "📊 Verificación de Captura"
 ])
 
 # ==========================================
-# PESTAÑA 1: ALTA DE CONDUCTOR
+# PESTAÑA 1: REGISTRO DE EMPRESA
 # ==========================================
 with tab1:
+    st.header("🏢 Alta y Registro de Empresa")
+    with st.form("form_empresa", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            nombre_empresa = st.text_input("Nombre de la empresa (Se guardará en MAYÚSCULAS) *")
+        with col2:
+            nombre_rl = st.text_input("Nombre del Representante Legal (RL) *")
+        
+        st.subheader("📁 Expediente de la Empresa")
+        c1, c2 = st.columns(2)
+        with c1:
+            f_ine_rl = st.file_uploader("Cargar INE del RL")
+            f_csf = st.file_uploader("Cargar Constancia de Situación Fiscal")
+        with c2:
+            f_cb = st.file_uploader("Cargar Carátula Bancaria")
+            f_dom_empresa = st.file_uploader("Cargar Comprobante de Domicilio")
+            
+        enviar_empresa = st.form_submit_button("Registrar Empresa")
+        
+        if enviar_empresa:
+            if not nombre_empresa or not nombre_rl:
+                st.error("Por favor completa los campos obligatorios (Nombre de la empresa y Representante Legal).")
+            else:
+                # Forzamos mayúsculas
+                empresa_upper = nombre_empresa.upper()
+                
+                datos_empresa = {
+                    "nombre_empresa": empresa_upper,
+                    "nombre_rl": nombre_rl,
+                    "url_ine_rl": procesar_archivo(f_ine_rl, "empresas/ines", empresa_upper),
+                    "url_constancia_fiscal": procesar_archivo(f_csf, "empresas/fiscal", empresa_upper),
+                    "url_caratula_bancaria": procesar_archivo(f_cb, "empresas/bancos", empresa_upper),
+                    "url_comprobante_domicilio": procesar_archivo(f_dom_empresa, "empresas/domicilios", empresa_upper)
+                }
+                
+                try:
+                    supabase.table("registro_empresa").insert(datos_empresa).execute()
+                    st.success(f"¡Empresa {empresa_upper} registrada exitosamente!")
+                except Exception as e:
+                    st.error(f"Error al registrar la empresa: {e}")
+
+# ==========================================
+# PESTAÑA 2: ALTA DE CONDUCTOR
+# ==========================================
+with tab2:
     with st.form("form_conductor", clear_on_submit=True):
         
         st.subheader("📝 Datos Generales")
         col1, col2 = st.columns(2)
         with col1:
             nombre = st.text_input("Nombre Completo *")
-            # max_chars=13 impide físicamente escribir más caracteres
             rfc = st.text_input("RFC *", max_chars=13, help="El RFC para personas físicas debe tener exactamente 13 caracteres.")
             correo = st.text_input("Correo")
         with col2:
             celular = st.text_input("Celular")
-            # --- NUEVOS CAMPOS BANCARIOS CON CONTROL DE CARACTERES ---
             banco = st.text_input("Nombre Banco")
-            # max_chars=18 impide físicamente que se escriban más de 18 dígitos
             clabe = st.text_input("Clabe Interbancaria", max_chars=18, help="La CLABE debe tener exactamente 18 dígitos numéricos.")
         
-        st.divider() # Agrega una línea sutil de separación
+        st.divider() 
         
         st.subheader("📁 Expediente Digital")
-        # Cuadrícula perfecta de 3x3 agrupada por tipo de documento
         c1, c2, c3 = st.columns(3)
         
         with c1:
@@ -123,23 +170,17 @@ with tab1:
         
         st.divider()
         
-        # El botón se alinea automáticamente
         enviar = st.form_submit_button("Guardar Conductor")
         
         if enviar:
             if not nombre or not rfc:
                 st.error("Por favor completa los campos obligatorios (Nombre y RFC)")
-            
-            # --- VALIDACIÓN PARA EL RFC ---
             elif len(rfc) < 13:
                 st.error(f"El RFC está incompleto. Ingresaste {len(rfc)} caracteres de los 13 requeridos.")
-            
-            # --- VALIDACIONES PARA LA CLABE INTERBANCARIA ---
             elif clabe and len(clabe) < 18:
                 st.error(f"La CLABE Interbancaria está incompleta. Ingresaste {len(clabe)} dígitos de los 18 requeridos.")
             elif clabe and not clabe.isdigit():
                 st.error("La CLABE Interbancaria solo debe contener caracteres numéricos (números del 0 al 9).")
-                
             else:
                 datos = {
                     "nombre_driver": nombre, 
@@ -162,10 +203,11 @@ with tab1:
                     st.success("Conductor registrado exitosamente")
                 except Exception as e:
                     st.error(f"Error al guardar: {e}")
+
 # ==========================================
-# PESTAÑA 2: UNIDADES
+# PESTAÑA 3: UNIDADES
 # ==========================================
-with tab2:
+with tab3:
     with st.form("form_unidades", clear_on_submit=True):
         p = st.text_input("Placas")
         m = st.text_input("Marca")
@@ -174,7 +216,6 @@ with tab2:
         tipo = st.selectbox("Tipo de Unidad", ["Sedan", "Small", "Large"])
         mod = st.number_input("Modelo", 1990, 2030, 2026)
         
-        # Nuevos campos de carga
         f_circ = st.file_uploader("Tarjeta Circulación")
         f_seg = st.file_uploader("Seguro")
         f_vin = st.file_uploader("Fotografía VIN")
@@ -203,100 +244,12 @@ with tab2:
                     st.error(f"Error al registrar la unidad: {e}")
 
 # ==========================================
-# PESTAÑA 3: REGISTRO DE OPERACIÓN
+# PESTAÑA 4: CONSULTA DE EXPEDIENTES
 # ==========================================
-with tab3:
-    st.header("Captura Dinámica de Despacho Operativo")
-    st.write("Módulo relacional. Permite enlazar los conductores y unidades activos en sistema.")
-    
-    # 1. Definimos variables vacías por defecto para prevenir NameError
-    dict_conductores = {}
-    dict_unidades = {}
-    
-    # 2. Intentamos cargar datos desde la base de datos
-    try:
-        conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").execute().data
-        unidades_db = supabase.table("unidades").select("id_unidad, placas").execute().data
-        
-        # Mapeo seguro
-        dict_conductores = {c["nombre_driver"]: c["id_conductor"] for c in conductores_db}
-        dict_unidades = {u["placas"]: u["id_unidad"] for u in unidades_db}
-    except Exception as e:
-        st.error(f"Error de sincronización con Supabase: {e}")
-
-    # 3. Verificamos que existan datos antes de mostrar el formulario
-    if not dict_conductores or not dict_unidades:
-        st.warning("⚠️ Atención: Debes tener conductores y unidades registrados para operar.")
-    else:
-        with st.form("form_operacion", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                # --- NUEVO CAMPO: Tipo de Cliente ---
-                tipo_cliente = st.selectbox("Tipo de Cliente *", options=["", "Mercado Libre", "Amazon"])
-                
-                # Opciones con espacio en blanco al inicio [""]
-                sel_conductor = st.selectbox("Seleccione el Conductor asignado *", options=[""] + list(dict_conductores.keys()))
-                sel_unidad = st.selectbox("Seleccione las Placas del Vehículo *", options=[""] + list(dict_unidades.keys()))
-                status_operacion = st.selectbox("Estatus del Servicio", options=["En ruta", "Cancelacion", "No show"])
-            
-            with col2:
-                paquetes = st.number_input("Cantidad de Paquetes Cargados", min_value=0, step=1, value=0)
-                paradas = st.number_input("Número de Paradas Planificadas (Ruta)", min_value=0, step=1, value=0)
-                
-            st.subheader("⏱️ Tiempos de Estancia en Hub")
-            t1, t2 = st.columns(2)
-            with t1:
-                fecha_llegada = st.date_input("Fecha de Llegada al Hub")
-                hora_llegada = st.time_input("Hora de Entrada (Hub)")
-            with t2:
-                fecha_salida = st.date_input("Fecha de Salida del Hub")
-                hora_salida = st.time_input("Hora de Despacho (Hub)")
-            
-            # Botones dentro del form
-            c_btn1, c_btn2 = st.columns([1, 4])
-            with c_btn1:
-                limpiar = st.form_submit_button("Limpiar")
-            with c_btn2:
-                enviar_operacion = st.form_submit_button("Cerrar y Despachar Operación")
-            
-            # --- FEEDBACK VISUAL DEL BOTÓN LIMPIAR ---
-            if limpiar:
-                st.info("🧹 Formulario reiniciado a sus valores por defecto.")
-            
-            # --- LÓGICA DE ENVÍO CON VALIDACIÓN ---
-            if enviar_operacion:
-                # Agregamos la validación obligatoria para el nuevo campo
-                if not tipo_cliente or not sel_conductor or not sel_unidad:
-                    st.error("Por favor selecciona el Tipo de Cliente, el Conductor y el Vehículo válidos para despachar.")
-                else:
-                    iso_llegada = datetime.combine(fecha_llegada, hora_llegada).isoformat()
-                    iso_salida = datetime.combine(fecha_salida, hora_salida).isoformat()
-                    
-                    datos_operacion = {
-                        "tipo_cliente": tipo_cliente, # <-- Se agrega al registro de Supabase
-                        "conductor_id": dict_conductores[sel_conductor],
-                        "unidad_id": dict_unidades[sel_unidad],
-                        "status_operacion": status_operacion,
-                        "hora_llegada_hub": iso_llegada,
-                        "hora_salida_hub": iso_salida,
-                        "paquetes_cargados": int(paquetes),
-                        "paradas": int(paradas)
-                    }
-                    
-                    try:
-                        supabase.table("registro_operacion").insert(datos_operacion).execute()
-                        st.success(f"¡Viaje de {tipo_cliente} despachado correctamente!")
-                    except Exception as e:
-                        st.error(f"Error al registrar la operación en base de datos: {e}")
-# ==========================================
-# NUEVA PESTAÑA 4: CONSULTA DE EXPEDIENTES
-# ==========================================
-# (Asegúrate de agregar "🔍 Consulta" a tu lista de st.tabs arriba)
 with tab4:
     st.header("🔍 Consulta Integral de Expedientes")
     tipo_consulta = st.radio("¿Qué desea consultar?", ["Conductores", "Unidades"], horizontal=True)
     
-    # Función de apoyo para crear el archivo ZIP en memoria
     def generar_zip(diccionario_documentos):
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -304,13 +257,12 @@ with tab4:
                 try:
                     respuesta = requests.get(url)
                     if respuesta.status_code == 200:
-                        # Extraemos la extensión del archivo (pdf, jpg, etc.)
                         ext = url.split('.')[-1]
                         if len(ext) > 4 or not ext.isalnum():
-                            ext = "pdf" # Extensión por defecto si no es clara
+                            ext = "pdf"
                         zip_file.writestr(f"{nombre}.{ext}", respuesta.content)
                 except Exception:
-                    pass # Si un archivo falla al descargar, simplemente lo omite
+                    pass
         return zip_buffer.getvalue()
 
     if tipo_consulta == "Conductores":
@@ -332,7 +284,6 @@ with tab4:
                             st.write(f"**RFC:** {reg.get('rfc', 'N/A')}")
                             st.write(f"**Correo:** {reg.get('correo', 'N/A')}")
                             st.write(f"**Celular:** {reg.get('celular', 'N/A')}")
-                            # --- NUEVOS CAMPOS BANCARIOS ---
                             st.write(f"**Banco:** {reg.get('nombre_banco', 'N/A') or 'N/A'}")
                             st.write(f"**CLABE:** {reg.get('clabe_interbancaria', 'N/A') or 'N/A'}")
                             
@@ -349,18 +300,16 @@ with tab4:
                                 "Examen Toxicológico": "url_toxicologico"
                             }
                             
-                            # Diccionario para almacenar solo los enlaces válidos
                             documentos_validos = {}
                             
                             for nombre, key in docs.items():
                                 url = reg.get(key)
                                 if url and isinstance(url, str) and url.startswith("http"):
                                     st.link_button(f"📄 Ver {nombre}", url)
-                                    documentos_validos[nombre] = url # Guardamos para el ZIP
+                                    documentos_validos[nombre] = url
                                 else:
                                     st.caption(f"❌ {nombre}: No cargado")
                             
-                            # --- BOTÓN DE DESCARGA MASIVA ---
                             if documentos_validos:
                                 st.write("---")
                                 st.download_button(
@@ -372,7 +321,7 @@ with tab4:
         except Exception as e:
             st.error(f"Error cargando conductores: {e}")
 
-    else: # --- LÓGICA DE UNIDADES ---
+    else:
         try:
             res = supabase.table("unidades").select("*").execute()
             df = pd.DataFrame(res.data)
@@ -403,11 +352,10 @@ with tab4:
                             url = reg.get(key)
                             if url and isinstance(url, str) and url.startswith("http"):
                                 st.link_button(f"📄 Ver {nombre}", url)
-                                documentos_u_validos[nombre] = url # Guardamos para el ZIP
+                                documentos_u_validos[nombre] = url
                             else:
                                 st.caption(f"❌ {nombre}: No cargado")
                                 
-                        # --- BOTÓN DE DESCARGA MASIVA ---
                         if documentos_u_validos:
                             st.write("---")
                             st.download_button(
@@ -420,7 +368,7 @@ with tab4:
             st.error(f"Error cargando unidades: {e}")
 
 # ===============================================
-# NUEVA PESTAÑA 5: ACTUALIZACION DE EXPEDIENTES
+# PESTAÑA 5: ACTUALIZACION DE EXPEDIENTES
 # ===============================================
 with tab5:
     st.header("🔄 Actualización de Expedientes")
@@ -435,12 +383,10 @@ with tab5:
             reg = res.data[0]
             st.write(f"Conductor encontrado: **{reg['nombre_driver']}**")
             st.write(f"Celular actual: **{reg.get('celular', 'No registrado')}**")
-            # --- MOSTRAMOS LOS DATOS BANCARIOS ACTUALES ---
             banco_actual = reg.get('nombre_banco') or 'No registrado'
             clabe_actual = reg.get('clabe_interbancaria') or 'No registrado'
             st.write(f"Banco actual: **{banco_actual}** | CLABE actual: **{clabe_actual}**")
             
-            # --- AYUDA VISUAL PARA EL USUARIO ---
             st.write("---")
             st.write("Estado de documentos actuales:")
             docs_map = {
@@ -456,24 +402,19 @@ with tab5:
                 cols[i % 3].write(f"{status} {nombre}")
             st.write("---")
             
-            # --- SELECTOR EXTENDIDO CON DATOS BANCARIOS ---
             opcion = st.selectbox("¿Qué deseas actualizar?", [""] + list(docs_map.keys()) + ["Actualizar Número de Celular", "Actualizar Datos Bancarios"])
             
             if opcion == "Actualizar Número de Celular":
-                # Mostramos el valor actual en la caja de texto para que sea más fácil editar
                 nuevo_celular = st.text_input("Nuevo número de celular:", value=reg.get('celular') or "")
                 if st.button("Guardar nuevo celular"):
                     supabase.table("alta_conductor").update({"celular": nuevo_celular}).eq("rfc", rfc_busqueda.upper()).execute()
                     st.success("¡Celular actualizado correctamente! Recarga la página para ver el cambio.")
             
-            # --- NUEVA LÓGICA PARA ACTUALIZAR BANCO Y CLABE ---
             elif opcion == "Actualizar Datos Bancarios":
                 nuevo_banco = st.text_input("Nuevo Nombre del Banco:", value=reg.get('nombre_banco') or "")
-                # Bloqueo físico de 18 caracteres
                 nueva_clabe = st.text_input("Nueva CLABE Interbancaria:", max_chars=18, value=reg.get('clabe_interbancaria') or "")
                 
                 if st.button("Guardar datos bancarios"):
-                    # Validaciones de la CLABE (igual que en el alta)
                     if nueva_clabe and len(nueva_clabe) < 18:
                         st.error(f"La CLABE está incompleta. Ingresaste {len(nueva_clabe)} dígitos de los 18 requeridos.")
                     elif nueva_clabe and not nueva_clabe.isdigit():
@@ -485,7 +426,6 @@ with tab5:
                         }).eq("rfc", rfc_busqueda.upper()).execute()
                         st.success("¡Datos bancarios actualizados correctamente! Recarga la página para ver el cambio.")
             
-            # --- LÓGICA PARA ARCHIVOS ---
             elif opcion in docs_map:
                 archivo_nuevo = st.file_uploader(f"Cargar nuevo archivo de {opcion}")
                 if st.button("Guardar actualización"):
@@ -503,15 +443,89 @@ with tab5:
         else:
             st.error("No se encontró ningún conductor con ese RFC.")
 
+# ==========================================
+# PESTAÑA 6: REGISTRO DE OPERACIÓN
+# ==========================================
+with tab6:
+    st.header("Captura Dinámica de Despacho Operativo")
+    st.write("Módulo relacional. Permite enlazar los conductores y unidades activos en sistema.")
+    
+    dict_conductores = {}
+    dict_unidades = {}
+    
+    try:
+        conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").execute().data
+        unidades_db = supabase.table("unidades").select("id_unidad, placas").execute().data
+        
+        dict_conductores = {c["nombre_driver"]: c["id_conductor"] for c in conductores_db}
+        dict_unidades = {u["placas"]: u["id_unidad"] for u in unidades_db}
+    except Exception as e:
+        st.error(f"Error de sincronización con Supabase: {e}")
+
+    if not dict_conductores or not dict_unidades:
+        st.warning("⚠️ Atención: Debes tener conductores y unidades registrados para operar.")
+    else:
+        with st.form("form_operacion", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                tipo_cliente = st.selectbox("Tipo de Cliente *", options=["", "Mercado Libre", "Amazon"])
+                sel_conductor = st.selectbox("Seleccione el Conductor asignado *", options=[""] + list(dict_conductores.keys()))
+                sel_unidad = st.selectbox("Seleccione las Placas del Vehículo *", options=[""] + list(dict_unidades.keys()))
+                status_operacion = st.selectbox("Estatus del Servicio", options=["En ruta", "Cancelacion", "No show"])
+            
+            with col2:
+                paquetes = st.number_input("Cantidad de Paquetes Cargados", min_value=0, step=1, value=0)
+                paradas = st.number_input("Número de Paradas Planificadas (Ruta)", min_value=0, step=1, value=0)
+                
+            st.subheader("⏱️ Tiempos de Estancia en Hub")
+            t1, t2 = st.columns(2)
+            with t1:
+                fecha_llegada = st.date_input("Fecha de Llegada al Hub")
+                hora_llegada = st.time_input("Hora de Entrada (Hub)")
+            with t2:
+                fecha_salida = st.date_input("Fecha de Salida del Hub")
+                hora_salida = st.time_input("Hora de Despacho (Hub)")
+            
+            c_btn1, c_btn2 = st.columns([1, 4])
+            with c_btn1:
+                limpiar = st.form_submit_button("Limpiar")
+            with c_btn2:
+                enviar_operacion = st.form_submit_button("Cerrar y Despachar Operación")
+            
+            if limpiar:
+                st.info("🧹 Formulario reiniciado a sus valores por defecto.")
+            
+            if enviar_operacion:
+                if not tipo_cliente or not sel_conductor or not sel_unidad:
+                    st.error("Por favor selecciona el Tipo de Cliente, el Conductor y el Vehículo válidos para despachar.")
+                else:
+                    iso_llegada = datetime.combine(fecha_llegada, hora_llegada).isoformat()
+                    iso_salida = datetime.combine(fecha_salida, hora_salida).isoformat()
+                    
+                    datos_operacion = {
+                        "tipo_cliente": tipo_cliente, 
+                        "conductor_id": dict_conductores[sel_conductor],
+                        "unidad_id": dict_unidades[sel_unidad],
+                        "status_operacion": status_operacion,
+                        "hora_llegada_hub": iso_llegada,
+                        "hora_salida_hub": iso_salida,
+                        "paquetes_cargados": int(paquetes),
+                        "paradas": int(paradas)
+                    }
+                    
+                    try:
+                        supabase.table("registro_operacion").insert(datos_operacion).execute()
+                        st.success(f"¡Viaje de {tipo_cliente} despachado correctamente!")
+                    except Exception as e:
+                        st.error(f"Error al registrar la operación en base de datos: {e}")
 
 # ===============================================
-# NUEVA PESTAÑA 6: VERIFICACION DE CAPTURA
+# PESTAÑA 7: VERIFICACION DE CAPTURA
 # ===============================================
-with tab6:
+with tab7:
     st.header("📊 Verificación de Captura")
     st.write("Consulta y verifica los despachos operativos registrados en el sistema.")
     
-    # --- FILTROS DE FECHA ---
     c_ini, c_fin = st.columns(2)
     with c_ini:
         fecha_inicio = st.date_input("Fecha de Inicio")
@@ -520,40 +534,29 @@ with tab6:
         
     if st.button("Buscar Capturas"):
         try:
-            # 1. Extraemos toda la base de operaciones
             res_op = supabase.table("registro_operacion").select("*").execute()
             df_op = pd.DataFrame(res_op.data)
             
             if not df_op.empty:
-                # 2. Extraemos diccionarios para traducir IDs a Nombres reales y tipos
                 cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").execute().data
-                # Añadimos 'tipo_unidad' a la consulta de unidades
                 unid_db = supabase.table("unidades").select("id_unidad, placas, tipo_unidad").execute().data
                 
-                # Creamos los mapas de traducción
                 map_cond = {c["id_conductor"]: c["nombre_driver"] for c in cond_db}
                 map_unid = {u["id_unidad"]: u["placas"] for u in unid_db}
-                # Nuevo mapa para extraer el tipo de unidad
                 map_tipo_unid = {u["id_unidad"]: u.get("tipo_unidad", "N/A") for u in unid_db}
                 
-                # Aplicamos la traducción al DataFrame
                 df_op["Conductor"] = df_op["conductor_id"].map(map_cond)
                 df_op["Placas"] = df_op["unidad_id"].map(map_unid)
-                df_op["Tipo Unidad"] = df_op["unidad_id"].map(map_tipo_unid) # <-- Agregamos el tipo de vehículo
+                df_op["Tipo Unidad"] = df_op["unidad_id"].map(map_tipo_unid) 
                 
-                # 3. Procesamiento y filtro de fechas
-                # Convertimos el texto ISO a formato fecha/hora de pandas
                 df_op["hora_llegada_hub"] = pd.to_datetime(df_op["hora_llegada_hub"]).dt.tz_localize(None)
                 
-                # Filtramos por el rango seleccionado
                 mascara = (df_op["hora_llegada_hub"].dt.date >= fecha_inicio) & (df_op["hora_llegada_hub"].dt.date <= fecha_fin)
                 df_filtrado = df_op.loc[mascara].copy()
                 
                 if not df_filtrado.empty:
-                    # Formateamos la hora para que se vea limpia en la tabla
                     df_filtrado["hora_llegada_hub"] = df_filtrado["hora_llegada_hub"].dt.strftime('%Y-%m-%d %H:%M')
                     
-                    # --- PEQUEÑO DASHBOARD (MÉTRICAS) ---
                     st.write("---")
                     m1, m2, m3 = st.columns(3)
                     m1.metric("Total de Viajes", len(df_filtrado))
@@ -561,14 +564,12 @@ with tab6:
                     m3.metric("Paradas Planificadas", int(df_filtrado["paradas"].sum()))
                     st.write("---")
                     
-                    # --- TABLA DE VERIFICACIÓN ---
-                    # Seleccionamos y renombramos las columnas incluyendo el nuevo campo
                     df_mostrar = df_filtrado[[
                         "hora_llegada_hub", 
                         "Conductor", 
                         "Placas", 
-                        "Tipo Unidad",       # <-- Sedan, Small, Large
-                        "tipo_cliente",      # <-- Mercado Libre, Amazon
+                        "Tipo Unidad",       
+                        "tipo_cliente",      
                         "status_operacion", 
                         "paquetes_cargados", 
                         "paradas"
@@ -580,7 +581,6 @@ with tab6:
                         "paradas": "Paradas"
                     })
                     
-                    # Mostramos la tabla interactiva
                     st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
                     
                 else:
@@ -590,4 +590,3 @@ with tab6:
                 
         except Exception as e:
             st.error(f"Error al generar la consulta: {e}")
-
