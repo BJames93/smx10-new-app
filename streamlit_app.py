@@ -92,7 +92,6 @@ with tab1:
         col1, col2 = st.columns(2)
         with col1:
             nombre_empresa = st.text_input("Nombre de la empresa (Se guardará en MAYÚSCULAS) *")
-            # --- NUEVO CAMPO RFC ---
             rfc_empresa = st.text_input("RFC de la Empresa *", max_chars=18, help="El RFC debe tener exactamente 18 caracteres.")
         with col2:
             nombre_rl = st.text_input("Nombre del Representante Legal (RL) *")
@@ -109,10 +108,8 @@ with tab1:
         enviar_empresa = st.form_submit_button("Registrar Empresa")
         
         if enviar_empresa:
-            # Validación de campos obligatorios
             if not nombre_empresa or not nombre_rl or not rfc_empresa:
                 st.error("Por favor completa los campos obligatorios (Nombre, RFC y Representante Legal).")
-            # Validación estricta de longitud del RFC
             elif len(rfc_empresa) < 18:
                 st.error(f"El RFC está incompleto. Ingresaste {len(rfc_empresa)} caracteres de los 18 requeridos.")
             else:
@@ -121,7 +118,7 @@ with tab1:
                 
                 datos_empresa = {
                     "nombre_empresa": empresa_upper,
-                    "rfc_empresa": rfc_upper,  # <-- Se guarda en la BD
+                    "rfc_empresa": rfc_upper,  
                     "nombre_rl": nombre_rl,
                     "url_ine_rl": procesar_archivo(f_ine_rl, "empresas/ines", empresa_upper),
                     "url_constancia_fiscal": procesar_archivo(f_csf, "empresas/fiscal", empresa_upper),
@@ -249,34 +246,3 @@ with tab3:
                     st.success("Unidad registrada exitosamente")
                 except Exception as e:
                     st.error(f"Error al registrar la unidad: {e}")
-
-# ==========================================
-# PESTAÑA 4: CONSULTA DE EXPEDIENTES
-# ==========================================
-with tab4:
-    st.header("🔍 Consulta Integral de Expedientes")
-    tipo_consulta = st.radio("¿Qué desea consultar?", ["Conductores", "Unidades"], horizontal=True)
-    
-    def generar_zip(diccionario_documentos):
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for nombre, url in diccionario_documentos.items():
-                try:
-                    respuesta = requests.get(url)
-                    if respuesta.status_code == 200:
-                        ext = url.split('.')[-1]
-                        if len(ext) > 4 or not ext.isalnum():
-                            ext = "pdf"
-                        zip_file.writestr(f"{nombre}.{ext}", respuesta.content)
-                except Exception:
-                    pass
-        return zip_buffer.getvalue()
-
-    if tipo_consulta == "Conductores":
-        try:
-            res = supabase.table("alta_conductor").select("*").execute()
-            df = pd.DataFrame(res.data)
-            
-            if not df.empty:
-                df['nombre_driver'] = df['nombre_driver'].fillna("").astype(str)
-                sel = st.selectbox("Seleccione Conductor:",
