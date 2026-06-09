@@ -15,10 +15,12 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 BUCKET_NAME = "documentos_operacion"
 
 # --- LÓGICA DE LOGIN CON SUPABASE ---
+# --- LÓGICA DE LOGIN CON SUPABASE ---
 def check_password():
     def password_entered():
-        input_user = st.session_state["username"]
-        input_pass = st.session_state["password"]
+        # El .strip() elimina espacios invisibles al inicio o al final del texto
+        input_user = st.session_state["username"].strip()
+        input_pass = st.session_state["password"].strip()
         
         try:
             res = supabase.table("usuarios_acceso").select("*").eq("nombre_usuario", input_user).eq("contrasena", input_pass).execute()
