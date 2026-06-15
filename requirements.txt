@@ -1,3 +1,4 @@
 streamlit
 supabase
 pandas
+reflex==0.9.5.post2
