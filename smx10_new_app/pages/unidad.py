@@ -83,7 +83,7 @@ def unidad() -> rx.Component:
                         value=UnidadState.modelo,
                         on_change=UnidadState.set_modelo,
                         width="100%",
-                        bg="gray",
+                        bg="white",
                         color="black",
                         border="1px solid #ccc"
                     ),

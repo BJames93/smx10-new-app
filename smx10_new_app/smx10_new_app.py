@@ -17,8 +17,8 @@ def index() -> rx.Component:
                 rx.text("Acceso al Sistema de Operaciones", color="gray", margin_bottom="1em"),
                 
                 # Inputs conectados a GlobalState
-                rx.input(placeholder="Usuario", on_change=GlobalState.set_usuario, bg="black", width="100%"),
-                rx.input(placeholder="Contraseña", type="password", on_change=GlobalState.set_contrasena, bg="black", width="100%"),
+                rx.input(placeholder="Usuario", on_change=GlobalState.set_usuario, bg="white", width="100%"),
+                rx.input(placeholder="Contraseña", type="password", on_change=GlobalState.set_contrasena, bg="white", width="100%"),
                 
                 # Botón conectado a la nueva función login()
                 rx.button("Ingresar", on_click=GlobalState.login, bg="#008000", color="white", width="100%", margin_top="1em"),
@@ -44,7 +44,7 @@ def dashboard() -> rx.Component:
                 rx.button("Registro de Empresa", on_click=lambda: rx.redirect("/empresa"), bg="#E07512D5", color="white"),
                 rx.button("Registra Conductores", on_click=lambda: rx.redirect("/conductor"), bg="#E07512D5", color="white"),
                 rx.button("Registra Unidades", on_click=lambda: rx.redirect("/unidad"), bg="#E07512D5", color="white"),
-                rx.button("Ir a Operaciones", on_click=lambda: rx.redirect("/operaciones"), bg="#E07512D5", color="white"),
+                rx.button("Registro de Operacion", on_click=lambda: rx.redirect("/operaciones"), bg="#E07512D5", color="white"),
                 margin_top="2em",
                 spacing="4"
             ),

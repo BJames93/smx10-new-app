@@ -120,12 +120,14 @@ class EmpresaState(rx.State):
         rfc_upper = self.rfc_empresa.upper()
         banco_upper = self.banco_empresa.upper() # <-- Banco en mayúsculas
         
+
         datos_empresa = {
             "nombre_empresa": empresa_upper,
             "rfc_empresa": rfc_upper,  
             "nombre_rl": self.nombre_rl,
             "banco_empresa": banco_upper,       # <-- Enviamos el banco
             "clabe_empresa": self.clabe_empresa, # <-- Enviamos la CLABE
+            "user_id": GlobalState.usuario_id,
             "creado_por": GlobalState.usuario_id if GlobalState.usuario_id else "Sistema",
             "url_ine_rl": self.url_ine if self.url_ine else None,
             "url_constancia_fiscal": self.url_csf if self.url_csf else None,
