@@ -12,7 +12,7 @@ SUPABASE_URL = "https://sinepuhjujazcaelrqms.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpbmVwdWhqdWphemNhZWxycW1zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTgwMDIsImV4cCI6MjA5NTk3NDAwMn0.RoTKaHzfbFViuiNOgMirfws0Pd13nCivAhxDoq_ipJM"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-BUCKET_NAME = "documentos_operacion"
+BUCKET_NAME = "documentos_operacion_smx10"
 
 # --- LÓGICA DE LOGIN CON SUPABASE ---
 def check_password():
