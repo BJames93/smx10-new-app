@@ -507,9 +507,9 @@ with tab6:
     dict_unidades = {}
     
     try:
-        # Se remueven los filtros de usuario para operar de forma unificada global
-        conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").execute().data
-        unidades_db = supabase.table("unidades").select("id_unidad, placas").execute().data
+        # Se agregan los filtros para asegurar que cada proveedor solo vea su propia flota
+        conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").eq("creado_por", usuario_id_activo).execute().data
+        unidades_db = supabase.table("unidades").select("id_unidad, placas").eq("creado_por", usuario_id_activo).execute().data
         
         dict_conductores = {c["nombre_driver"]: c["id_conductor"] for c in conductores_db}
         dict_unidades = {u["placas"]: u["id_unidad"] for u in unidades_db}
@@ -590,7 +590,8 @@ with tab7:
         
     if st.button("Buscar Capturas"):
         try:
-            res_op = supabase.table("registro_operacion").select("*").execute()
+            # Filtro aplicado para traer solo los viajes registrados por el usuario activo
+            res_op = supabase.table("registro_operacion").select("*").eq("creado_por", usuario_id_activo).execute()
             df_op = pd.DataFrame(res_op.data)
             
             if not df_op.empty:
