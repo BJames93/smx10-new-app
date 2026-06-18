@@ -143,7 +143,7 @@ with tab1:
                 
                 datos_empresa = {
                     "nombre_empresa": empresa_upper,
-                    "rfc_empresa": rfc_upper,  
+                    "RFC": rfc_upper,  
                     "nombre_rl": nombre_rl,
                     "creado_por": usuario_id_activo,
                     "url_ine_rl": url_ine,
