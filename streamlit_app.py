@@ -595,8 +595,9 @@ with tab7:
             df_op = pd.DataFrame(res_op.data)
             
             if not df_op.empty:
-                cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").execute().data
-                unid_db = supabase.table("unidades").select("id_unidad, placas, tipo_unidad").execute().data
+                # Filtros añadidos para que los diccionarios de edición también sean exclusivos del usuario
+                cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").eq("creado_por", usuario_id_activo).execute().data
+                unid_db = supabase.table("unidades").select("id_unidad, placas, tipo_unidad").eq("creado_por", usuario_id_activo).execute().data
                 
                 map_cond = {c["id_conductor"]: c["nombre_driver"] for c in cond_db}
                 map_unid = {u["id_unidad"]: u["placas"] for u in unid_db}
