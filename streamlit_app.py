@@ -77,7 +77,7 @@ usuario_id_activo = st.session_state["usuario_actual"]["user_id"]
 nombre_usuario_activo = st.session_state["usuario_actual"]["nombre_usuario"]
 
 # --- INTERFAZ PRINCIPAL ---
-st.set_page_config(page_title="Plataforma SMX10", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="Plataforma BoulderBrwn", page_icon="🚀", layout="wide")
 
 # --- OCULTAR ELEMENTOS DE LA INTERFAZ DE STREAMLIT ---
 hide_st_style = """
@@ -94,7 +94,7 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 # Mensaje lateral de bienvenida
 st.sidebar.success(f"👤 Conectado como: **{nombre_usuario_activo}**")
 
-st.title("📊 Sistema Centralizado SVC: SMX10")
+st.title("📊 Sistema Centralizado de Proveedores")
 
 # Reordenamiento de Tabs de acuerdo a la declaración oficial
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
@@ -130,8 +130,8 @@ with tab1:
         if enviar_empresa:
             if not nombre_empresa or not nombre_rl or not rfc_empresa:
                 st.error("Por favor completa los campos obligatorios (Nombre, RFC y Representante Legal).")
-            elif len(rfc_empresa) < 18:
-                st.error(f"El RFC está incompleto. Ingresaste {len(rfc_empresa)} caracteres de los 18 requeridos.")
+            elif len(rfc_empresa) < 13:
+                st.error(f"El RFC está incompleto. Ingresaste {len(rfc_empresa)} caracteres de los 13 requeridos.")
             else:
                 empresa_upper = nombre_empresa.upper()
                 rfc_upper = rfc_empresa.upper()
