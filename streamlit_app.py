@@ -112,7 +112,7 @@ with tab1:
         col1, col2 = st.columns(2)
         with col1:
             nombre_empresa = st.text_input("Nombre de la empresa (Se guardará en MAYÚSCULAS) *")
-            rfc_empresa = st.text_input("RFC de la Empresa *", max_chars=18, help="El RFC debe tener exactamente 18 caracteres.")
+            rfc_empresa = st.text_input("RFC de la Empresa *", max_chars=13, help="El RFC debe tener exactamente 13 caracteres.")
         with col2:
             nombre_rl = st.text_input("Nombre del Representante Legal (RL) *")
         
