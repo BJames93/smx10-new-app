@@ -114,8 +114,15 @@ with tab1:
             nombre_empresa = st.text_input("Nombre de la empresa (Se guardará en MAYÚSCULAS) *")
             rfc_empresa = st.text_input("RFC de la Empresa *", max_chars=13, help="El RFC debe tener exactamente 13 caracteres.")
         with col2:
-            nombre_rl = st.text_input("Nombre del Representante Legal (RL) *")
-        
+            nombre_rl = st.text_input("Nombre del Representante Legal (RL) (Se guardará en MAYÚSCULAS) *")
+
+        st.subheader("🏦 Datos Bancarios")
+        c_bank1, c_bank2 = st.columns(2)
+        with c_bank1:
+            banco_empresa = st.text_input("Banco (Se guardará en MAYÚSCULAS) *")
+        with c_bank2:
+            clabe_empresa = st.text_input("Cuenta CLABE *", max_chars=18, help="La CLABE debe tener exactamente 18 caracteres numéricos.")
+
         st.subheader("📁 Expediente de la Empresa")
         c1, c2 = st.columns(2)
         with c1:
@@ -128,13 +135,19 @@ with tab1:
         enviar_empresa = st.form_submit_button("Registrar Empresa")
         
         if enviar_empresa:
-            if not nombre_empresa or not nombre_rl or not rfc_empresa:
-                st.error("Por favor completa los campos obligatorios (Nombre, RFC y Representante Legal).")
+            if not nombre_empresa or not nombre_rl or not rfc_empresa or not banco_empresa or not clabe_empresa:
+                st.error("Por favor completa los campos obligatorios (Nombre, RFC, Representante Legal, Banco y CLABE).")
             elif len(rfc_empresa) < 13:
                 st.error(f"El RFC está incompleto. Ingresaste {len(rfc_empresa)} caracteres de los 13 requeridos.")
+            elif len(clabe_empresa) < 18:
+                st.error(f"La CLABE está incompleta. Ingresaste {len(clabe_empresa)} caracteres de los 18 requeridos.")
+            elif not clabe_empresa.isdigit():
+                st.error("La CLABE solo debe contener números, sin letras ni espacios.")
             else:
                 empresa_upper = nombre_empresa.upper()
                 rfc_upper = rfc_empresa.upper()
+                rl_upper = nombre_rl.upper()
+                banco_upper = banco_empresa.upper()
                 
                 url_ine = procesar_archivo(f_ine_rl, "empresas/ines", empresa_upper)
                 url_csf = procesar_archivo(f_csf, "empresas/fiscal", empresa_upper)
@@ -144,7 +157,9 @@ with tab1:
                 datos_empresa = {
                     "nombre_empresa": empresa_upper,
                     "RFC": rfc_upper,  
-                    "nombre_rl": nombre_rl,
+                    "nombre_rl": rl_upper,
+                    "banco_empresa": banco_upper,
+                    "clabe_empresa": clabe_empresa,
                     "creado_por": usuario_id_activo,
                     "url_ine_rl": url_ine,
                     "url_constancia_fiscal": url_csf,
@@ -157,7 +172,6 @@ with tab1:
                     st.success(f"¡Empresa {empresa_upper} registrada exitosamente!")
                 except Exception as e:
                     st.error(f"Error al registrar la empresa: {e}")
-
 # ==========================================
 # PESTAÑA 2: ALTA DE CONDUCTOR
 # ==========================================
