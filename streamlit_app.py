@@ -194,20 +194,20 @@ with tab2:
         
         with c1:
             st.markdown("**Identidad**")
-            f_foto = st.file_uploader("Foto")
-            f_ine = st.file_uploader("INE")
-            f_curp = st.file_uploader("CURP")
+            f_foto = st.file_uploader("Foto (Mercado Libre)")
+            f_ine = st.file_uploader("INE (Mercado Libre)")
+            f_curp = st.file_uploader("CURP (Mercado Libre)")
             
         with c2:
             st.markdown("**Operación y Control**")
-            f_lic = st.file_uploader("Licencia")
+            f_lic = st.file_uploader("Licencia (Mercado Libre)")
             f_tox = st.file_uploader("Toxicológico")
             f_ref = st.file_uploader("Carta de Referencia")
             
         with c3:
             st.markdown("**Fiscal y Bancario**")
             f_fis = st.file_uploader("Constancia Fiscal")
-            f_dom = st.file_uploader("Domicilio")
+            f_dom = st.file_uploader("Comprobante de Domicilio (Mercado Libre)")
             f_ban = st.file_uploader("Banco (Archivo)") 
         
         st.divider()
@@ -268,8 +268,8 @@ with tab3:
         tipo = st.selectbox("Tipo de Unidad", ["Sedan", "Small", "Large"])
         mod = st.number_input("Modelo", 1990, 2030, 2026)
         
-        f_circ = st.file_uploader("Tarjeta Circulación")
-        f_seg = st.file_uploader("Seguro")
+        f_circ = st.file_uploader("Tarjeta Circulación (Mercado Libre)")
+        f_seg = st.file_uploader("Seguro (Mercado Libre)")
         f_vin = st.file_uploader("Fotografía VIN")
         f_plac = st.file_uploader("Fotografía Placas")
         
