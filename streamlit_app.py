@@ -511,35 +511,48 @@ with tab5:
             st.error("No se encontró ningún conductor con ese RFC en tu cuenta de usuario.")
 
 # ==========================================
-# PESTAÑA 6: REGISTRO DE OPERACIÓN
+# PESTAÑA 6: REGISTRO DE OPERACIÓN Y DEVOLUCIONES
 # ==========================================
 with tab6:
     st.header("Captura Dinámica de Despacho Operativo")
     st.write("Módulo relacional. Permite enlazar los conductores y unidades activos en sistema.")
     
+    # 1. Definimos variables vacías por defecto para prevenir NameError
     dict_conductores = {}
     dict_unidades = {}
     
+    # 2. Intentamos cargar datos desde la base de datos (Filtrados por usuario activo)
     try:
-        # Se agregan los filtros para asegurar que cada proveedor solo vea su propia flota
         conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").eq("creado_por", usuario_id_activo).execute().data
         unidades_db = supabase.table("unidades").select("id_unidad, placas").eq("creado_por", usuario_id_activo).execute().data
         
+        # Mapeo seguro
         dict_conductores = {c["nombre_driver"]: c["id_conductor"] for c in conductores_db}
         dict_unidades = {u["placas"]: u["id_unidad"] for u in unidades_db}
     except Exception as e:
         st.error(f"Error de sincronización con Supabase: {e}")
 
+    # 3. Verificamos que existan datos antes de mostrar el formulario
     if not dict_conductores or not dict_unidades:
         st.warning("⚠️ Atención: Debes tener conductores y unidades registrados para operar.")
     else:
+        # =======================================================
+        # MÓDULO 1: REGISTRO DE OPERACIÓN (DESPACHO)
+        # =======================================================
         with st.form("form_operacion", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
+                # --- CAMPO: Tipo de Cliente ---
                 tipo_cliente = st.selectbox("Tipo de Cliente *", options=["", "Mercado Libre", "Amazon"])
+                
                 sel_conductor = st.selectbox("Seleccione el Conductor asignado *", options=[""] + list(dict_conductores.keys()))
                 sel_unidad = st.selectbox("Seleccione las Placas del Vehículo *", options=[""] + list(dict_unidades.keys()))
                 status_operacion = st.selectbox("Estatus del Servicio", options=["En ruta", "Cancelacion", "No show"])
+                
+                # --- CAMPOS BOOLEANOS Y COSTO ---
+                es_ambulancia = st.checkbox("¿Realizó Ambulancia?")
+                es_costal = st.checkbox("¿Es Costal?")
+                monto_ambulancia = st.number_input("Costo Ambulancia ($)", min_value=0.0, value=0.0, step=100.0)
             
             with col2:
                 paquetes = st.number_input("Cantidad de Paquetes Cargados", min_value=0, step=1, value=0)
@@ -561,17 +574,18 @@ with tab6:
                 enviar_operacion = st.form_submit_button("Cerrar y Despachar Operación")
             
             if limpiar:
-                st.info("🧹 Formulario reiniciado.")
+                st.info("🧹 Formulario reiniciado a sus valores por defecto.")
             
             if enviar_operacion:
                 if not tipo_cliente or not sel_conductor or not sel_unidad:
-                    st.error("Por favor completa los campos obligatorios para despachar.")
+                    st.error("Por favor selecciona el Tipo de Cliente, el Conductor y el Vehículo válidos para despachar.")
                 else:
                     iso_llegada = datetime.combine(fecha_llegada, hora_llegada).isoformat()
                     iso_salida = datetime.combine(fecha_salida, hora_salida).isoformat()
                     
                     datos_operacion = {
-                        "tipo_cliente": tipo_cliente, 
+                        "creado_por": usuario_id_activo,  # <--- LLAVE MAESTRA AÑADIDA PARA DESPACHOS
+                        "tipo_cliente": tipo_cliente,
                         "conductor_id": dict_conductores[sel_conductor],
                         "unidad_id": dict_unidades[sel_unidad],
                         "status_operacion": status_operacion,
@@ -579,14 +593,58 @@ with tab6:
                         "hora_salida_hub": iso_salida,
                         "paquetes_cargados": int(paquetes),
                         "paradas": int(paradas),
-                        "creado_por": usuario_id_activo
+                        "ambulancia": es_ambulancia,
+                        "costal": es_costal,
+                        "costo_ambulancia_variable": float(monto_ambulancia)
                     }
                     
                     try:
                         supabase.table("registro_operacion").insert(datos_operacion).execute()
-                        st.success(f"¡Viaje de {tipo_cliente} despachado correctamente!")
+                        st.success(f"¡Viaje despachado! (Ambulancia: {'Sí' if es_ambulancia else 'No'} | Costo: ${monto_ambulancia:,.2f})")
                     except Exception as e:
-                        st.error(f"Error al registrar la operación: {e}")
+                        st.error(f"Error al registrar la operación en base de datos: {e}")
+
+        # =======================================================
+        # MÓDULO 2: REGISTRO DE DEVOLUCIONES (SMX10-operaciones)
+        # =======================================================
+        st.write("---")
+        st.subheader("📦 Registro de Devoluciones")
+        st.write("Captura de paquetes retornados asociando la operación a un conductor y unidad.")
+
+        with st.form("form_devoluciones", clear_on_submit=True):
+            col_dev1, col_dev2 = st.columns(2)
+            
+            with col_dev1:
+                dev_cliente = st.selectbox("Tipo de Cliente (Devolución) *", options=["", "Mercado Libre", "Amazon"])
+                dev_conductor = st.selectbox("Conductor asignado *", options=[""] + list(dict_conductores.keys()), key="dev_cond")
+                dev_unidad = st.selectbox("Placas del Vehículo *", options=[""] + list(dict_unidades.keys()), key="dev_unid")
+            
+            with col_dev2:
+                # Permite seleccionar una fecha pasada para devoluciones desfasadas
+                dev_fecha = st.date_input("Fecha de Devolución *")
+                dev_paquetes = st.number_input("Cantidad de Paquetes Devueltos *", min_value=1, step=1, value=1)
+            
+            enviar_devolucion = st.form_submit_button("Registrar Devolución")
+            
+            if enviar_devolucion:
+                if not dev_cliente or not dev_conductor or not dev_unidad:
+                    st.error("⚠️ Por favor selecciona el Cliente, Conductor y Placas para registrar la devolución.")
+                else:
+                    datos_devolucion = {
+                        "user_id": usuario_id_activo,  # <--- LLAVE MAESTRA AÑADIDA PARA DEVOLUCIONES
+                        "fecha_devolucion": dev_fecha.isoformat(),
+                        "tipo_cliente": dev_cliente,
+                        "conductor_id": dict_conductores[dev_conductor],
+                        "unidad_id": dict_unidades[dev_unidad],
+                        "paquetes_devueltos": int(dev_paquetes)
+                    }
+                    
+                    try:
+                        supabase.table("devoluciones").insert(datos_devolucion).execute()
+                        st.success(f"✅ ¡Devolución de {dev_paquetes} paquete(s) de {dev_cliente} registrada correctamente!")
+                    except Exception as e:
+                        st.error(f"Error al registrar la devolución en la base de datos: {e}")
+
 
 # ===============================================
 # PESTAÑA 7: VERIFICACION DE CAPTURA Y EDICIÓN
