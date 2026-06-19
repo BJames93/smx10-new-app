@@ -334,6 +334,7 @@ with tab3:
                     st.success(f"¡Unidad con placas {placas_up} registrada exitosamente junto con su galería fotográfica!")
                 except Exception as e:
                     st.error(f"Error al registrar la unidad en la base de datos: {e}")
+
 # ==========================================
 # PESTAÑA 4: CONSULTA DE EXPEDIENTES
 # ==========================================
@@ -434,13 +435,20 @@ with tab4:
                         st.write(f"**Marca:** {reg.get('marca', 'N/A')} | **Submarca:** {reg.get('submarca', 'N/A')} | **Modelo:** {reg.get('modelo', 'N/A')}")
                         st.write(f"**Tipo de Unidad:** {reg.get('tipo_unidad', 'N/A')}")
                         
-                        st.write("### Documentación de Unidad")
+                        st.write("### Documentación e Inspección de Unidad")
+                        
+                        # --- DICCIONARIO ACTUALIZADO CON LAS 4 FOTOGRAFÍAS ---
                         docs_u = {
                             "Tarjeta de Circulación": "url_tarjeta_circulacion",
                             "Póliza de Seguro": "url_poliza_seguro",
                             "Fotografía VIN": "url_vin",
-                            "Fotografía Placas": "url_placa"
+                            "Fotografía Placas (Anterior)": "url_placa", 
+                            "Foto Frontal": "url_foto_frontal",
+                            "Foto Trasera": "url_foto_trasera",
+                            "Foto Lateral Izquierda": "url_foto_izquierda",
+                            "Foto Lateral Derecha": "url_foto_derecha"
                         }
+                        # -----------------------------------------------------
                         
                         documentos_u_validos = {}
                         for nombre, key in docs_u.items():
@@ -454,7 +462,7 @@ with tab4:
                         if documentos_u_validos:
                             st.write("---")
                             st.download_button(
-                                label="📦 Descargar Documentos en ZIP",
+                                label="📦 Descargar Documentos e Inspección en ZIP",
                                 data=generar_zip(documentos_u_validos),
                                 file_name=f"Unidad_{sel.replace(' ', '_')}.zip",
                                 mime="application/zip"
