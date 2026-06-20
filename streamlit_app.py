@@ -14,6 +14,9 @@ SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 BUCKET_NAME = "documentos_operacion_smx10"
 
+# --- CONFIGURACIÓN DEL USUARIO MAESTRO ---
+USUARIO_MAESTRO = "boulder_admin"
+
 # --- LÓGICA DE LOGIN CON SUPABASE ---
 def check_password():
     def password_entered():
@@ -172,6 +175,7 @@ with tab1:
                     st.success(f"¡Empresa {empresa_upper} registrada exitosamente!")
                 except Exception as e:
                     st.error(f"Error al registrar la empresa: {e}")
+
 # ==========================================
 # PESTAÑA 2: ALTA DE CONDUCTOR
 # ==========================================
@@ -322,7 +326,6 @@ with tab3:
                     "url_tarjeta_circulacion": u_circ,
                     "url_poliza_seguro": u_seg,
                     "url_vin": u_vin,
-                    # Mapeo de los nuevos enlaces web a las columnas de Supabase
                     "url_foto_frontal": u_frontal,
                     "url_foto_trasera": u_trasera,
                     "url_foto_izquierda": u_izquierda,
@@ -359,7 +362,12 @@ with tab4:
 
     if tipo_consulta == "Conductores":
         try:
-            res = supabase.table("alta_conductor").select("*").eq("creado_por", usuario_id_activo).execute()
+            # --- INTERRUPTOR MAESTRO ---
+            if nombre_usuario_activo == USUARIO_MAESTRO:
+                res = supabase.table("alta_conductor").select("*").execute()
+            else:
+                res = supabase.table("alta_conductor").select("*").eq("creado_por", usuario_id_activo).execute()
+            
             df = pd.DataFrame(res.data)
             
             if not df.empty:
@@ -413,13 +421,18 @@ with tab4:
                                     mime="application/zip"
                                 )
             else:
-                st.info("No tienes conductores registrados en tu cuenta.")
+                st.info("No se encontraron conductores registrados.")
         except Exception as e:
             st.error(f"Error cargando conductores: {e}")
 
     else:
         try:
-            res = supabase.table("unidades").select("*").eq("creado_por", usuario_id_activo).execute()
+            # --- INTERRUPTOR MAESTRO ---
+            if nombre_usuario_activo == USUARIO_MAESTRO:
+                res = supabase.table("unidades").select("*").execute()
+            else:
+                res = supabase.table("unidades").select("*").eq("creado_por", usuario_id_activo).execute()
+                
             df = pd.DataFrame(res.data)
             
             if not df.empty:
@@ -437,7 +450,6 @@ with tab4:
                         
                         st.write("### Documentación e Inspección de Unidad")
                         
-                        # --- DICCIONARIO ACTUALIZADO CON LAS 4 FOTOGRAFÍAS ---
                         docs_u = {
                             "Tarjeta de Circulación": "url_tarjeta_circulacion",
                             "Póliza de Seguro": "url_poliza_seguro",
@@ -448,7 +460,6 @@ with tab4:
                             "Foto Lateral Izquierda": "url_foto_izquierda",
                             "Foto Lateral Derecha": "url_foto_derecha"
                         }
-                        # -----------------------------------------------------
                         
                         documentos_u_validos = {}
                         for nombre, key in docs_u.items():
@@ -468,7 +479,7 @@ with tab4:
                                 mime="application/zip"
                             )
             else:
-                st.info("No tienes unidades registradas en tu cuenta.")
+                st.info("No se encontraron unidades registradas.")
         except Exception as e:
             st.error(f"Error cargando unidades: {e}")
 
@@ -479,18 +490,18 @@ with tab5:
     st.header("🔄 Actualización de Expedientes")
     st.info("Utiliza esta sección para subir documentos faltantes, renovaciones o actualizar datos de conductores y unidades.")
     
-    # --- SELECTOR DE CATEGORÍA ---
     tipo_expediente = st.radio("Selecciona el tipo de expediente a gestionar:", ["Conductores", "Unidades"], horizontal=True)
     st.write("---")
     
-    # ==========================================
-    # SUBMÓDULO A: EXPEDIENTES DE CONDUCTORES
-    # ==========================================
     if tipo_expediente == "Conductores":
         rfc_busqueda = st.text_input("Ingresa el RFC del conductor para actualizar:")
         
         if rfc_busqueda:
-            res = supabase.table("alta_conductor").select("*").eq("rfc", rfc_busqueda.upper()).eq("creado_por", usuario_id_activo).execute()
+            # --- INTERRUPTOR MAESTRO ---
+            if nombre_usuario_activo == USUARIO_MAESTRO:
+                res = supabase.table("alta_conductor").select("*").eq("rfc", rfc_busqueda.upper()).execute()
+            else:
+                res = supabase.table("alta_conductor").select("*").eq("rfc", rfc_busqueda.upper()).eq("creado_por", usuario_id_activo).execute()
             
             if res.data:
                 reg = res.data[0]
@@ -520,10 +531,8 @@ with tab5:
                     cols[i % 3].write(f"{status} {nombre}")
                 st.write("---")
                 
-                # --- SE AGREGÓ "Actualizar Correo Electrónico" AL MENÚ ---
                 opcion = st.selectbox("¿Qué deseas actualizar?", [""] + list(docs_map.keys()) + ["Actualizar Correo Electrónico", "Actualizar Número de Celular", "Actualizar Datos Bancarios"], key="opcion_cond")
                 
-                # --- NUEVA LÓGICA PARA EL CORREO ---
                 if opcion == "Actualizar Correo Electrónico":
                     nuevo_correo = st.text_input("Nuevo Correo Electrónico:", value=reg.get('correo') or "")
                     if st.button("Guardar nuevo correo"):
@@ -566,17 +575,17 @@ with tab5:
                         else:
                             st.warning("Por favor selecciona un archivo.")
             else:
-                st.error("No se encontró ningún conductor con ese RFC en tu cuenta de usuario.")
+                st.error("No se encontró ningún conductor con ese RFC en tu cuenta o sistema.")
 
-    # ==========================================
-    # SUBMÓDULO B: EXPEDIENTES DE UNIDADES (NUEVO)
-    # ==========================================
     elif tipo_expediente == "Unidades":
         placas_busqueda = st.text_input("Ingresa las Placas de la unidad para actualizar:")
         
         if placas_busqueda:
-            # Blindaje estricto por usuario activo para evitar manipulación de flotillas ajenas
-            res_u = supabase.table("unidades").select("*").eq("placas", placas_busqueda.upper()).eq("creado_por", usuario_id_activo).execute()
+            # --- INTERRUPTOR MAESTRO ---
+            if nombre_usuario_activo == USUARIO_MAESTRO:
+                res_u = supabase.table("unidades").select("*").eq("placas", placas_busqueda.upper()).execute()
+            else:
+                res_u = supabase.table("unidades").select("*").eq("placas", placas_busqueda.upper()).eq("creado_por", usuario_id_activo).execute()
             
             if res_u.data:
                 reg_u = res_u.data[0]
@@ -586,7 +595,6 @@ with tab5:
                 st.write("---")
                 st.write("Estado de documentos y fotografías actuales:")
                 
-                # Mapeo de campos: Estructura interna -> (Columna DB, Carpeta Bucket, Sufijo del archivo)
                 docs_map_u = {
                     "Tarjeta de Circulación": ("url_tarjeta_circulacion", "unidades/tarjetas", ""),
                     "Póliza de Seguro": ("url_poliza_seguro", "unidades/polizas", ""),
@@ -612,8 +620,6 @@ with tab5:
                         if archivo_nuevo_u:
                             key_db, ruta_storage, sufijo = docs_map_u[opcion_u]
                             placas_up = placas_busqueda.upper()
-                            
-                            # Generación del identificador limpio unificado para la carpeta de almacenamiento
                             identificador_archivo = f"{placas_up}{sufijo}"
                             
                             nueva_url_u = procesar_archivo(archivo_nuevo_u, ruta_storage, identificador_archivo)
@@ -622,7 +628,8 @@ with tab5:
                         else:
                             st.warning("Por favor selecciona un archivo o fotografía.")
             else:
-                st.error("No se encontró ninguna unidad con esas placas vinculada a tu cuenta de usuario.")
+                st.error("No se encontró ninguna unidad con esas placas vinculada a tu cuenta o sistema.")
+
 # ==========================================
 # PESTAÑA 6: REGISTRO DE OPERACIÓN Y DEVOLUCIONES
 # ==========================================
@@ -630,22 +637,27 @@ with tab6:
     st.header("Captura Dinámica de Despacho Operativo")
     st.write("Módulo relacional. Permite enlazar los conductores y unidades activos en sistema.")
     
-    # 1. Definimos variables vacías por defecto para prevenir NameError
     dict_conductores = {}
     dict_unidades = {}
+    dict_conductores_owner = {}
     
-    # 2. Intentamos cargar datos desde la base de datos (Filtrados por usuario activo)
     try:
-        conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").eq("creado_por", usuario_id_activo).execute().data
-        unidades_db = supabase.table("unidades").select("id_unidad, placas").eq("creado_por", usuario_id_activo).execute().data
+        # --- INTERRUPTOR MAESTRO --- (Bypass inteligente para jalar toda la flotilla o solo la propia)
+        if nombre_usuario_activo == USUARIO_MAESTRO:
+            conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").execute().data
+            unidades_db = supabase.table("unidades").select("id_unidad, placas").execute().data
+        else:
+            conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").eq("creado_por", usuario_id_activo).execute().data
+            unidades_db = supabase.table("unidades").select("id_unidad, placas").eq("creado_por", usuario_id_activo).execute().data
         
-        # Mapeo seguro
+        # Mapeos seguros
         dict_conductores = {c["nombre_driver"]: c["id_conductor"] for c in conductores_db}
         dict_unidades = {u["placas"]: u["id_unidad"] for u in unidades_db}
+        # Diccionario clave: Guarda quién es el dueño original de cada conductor
+        dict_conductores_owner = {c["id_conductor"]: c.get("creado_por") for c in conductores_db}
     except Exception as e:
         st.error(f"Error de sincronización con Supabase: {e}")
 
-    # 3. Verificamos que existan datos antes de mostrar el formulario
     if not dict_conductores or not dict_unidades:
         st.warning("⚠️ Atención: Debes tener conductores y unidades registrados para operar.")
     else:
@@ -655,14 +667,11 @@ with tab6:
         with st.form("form_operacion", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
-                # --- CAMPO: Tipo de Cliente ---
                 tipo_cliente = st.selectbox("Tipo de Cliente *", options=["", "Mercado Libre", "Amazon"])
-                
                 sel_conductor = st.selectbox("Seleccione el Conductor asignado *", options=[""] + list(dict_conductores.keys()))
                 sel_unidad = st.selectbox("Seleccione las Placas del Vehículo *", options=[""] + list(dict_unidades.keys()))
                 status_operacion = st.selectbox("Estatus del Servicio", options=["En ruta", "Cancelacion", "No show"])
                 
-                # --- CAMPOS BOOLEANOS Y COSTO ---
                 es_ambulancia = st.checkbox("¿Realizó Ambulancia?")
                 es_costal = st.checkbox("¿Es Costal?")
                 monto_ambulancia = st.number_input("Costo Ambulancia ($)", min_value=0.0, value=0.0, step=100.0)
@@ -696,10 +705,14 @@ with tab6:
                     iso_llegada = datetime.combine(fecha_llegada, hora_llegada).isoformat()
                     iso_salida = datetime.combine(fecha_salida, hora_salida).isoformat()
                     
+                    # Asignación automática: si registra el Maestro, guarda el viaje al ID del dueño del conductor
+                    cond_id_seleccionado = dict_conductores[sel_conductor]
+                    owner_operacion = dict_conductores_owner.get(cond_id_seleccionado, usuario_id_activo)
+                    
                     datos_operacion = {
-                        "creado_por": usuario_id_activo,  # <--- LLAVE MAESTRA AÑADIDA PARA DESPACHOS
+                        "creado_por": owner_operacion, 
                         "tipo_cliente": tipo_cliente,
-                        "conductor_id": dict_conductores[sel_conductor],
+                        "conductor_id": cond_id_seleccionado,
                         "unidad_id": dict_unidades[sel_unidad],
                         "status_operacion": status_operacion,
                         "hora_llegada_hub": iso_llegada,
@@ -713,7 +726,7 @@ with tab6:
                     
                     try:
                         supabase.table("registro_operacion").insert(datos_operacion).execute()
-                        st.success(f"¡Viaje despachado! (Ambulancia: {'Sí' if es_ambulancia else 'No'} | Costo: ${monto_ambulancia:,.2f})")
+                        st.success(f"¡Viaje despachado correctamente! Guardado bajo la cuenta del proveedor.")
                     except Exception as e:
                         st.error(f"Error al registrar la operación en base de datos: {e}")
 
@@ -733,7 +746,6 @@ with tab6:
                 dev_unidad = st.selectbox("Placas del Vehículo *", options=[""] + list(dict_unidades.keys()), key="dev_unid")
             
             with col_dev2:
-                # Permite seleccionar una fecha pasada para devoluciones desfasadas
                 dev_fecha = st.date_input("Fecha de Devolución *")
                 dev_paquetes = st.number_input("Cantidad de Paquetes Devueltos *", min_value=1, step=1, value=1)
             
@@ -743,21 +755,24 @@ with tab6:
                 if not dev_cliente or not dev_conductor or not dev_unidad:
                     st.error("⚠️ Por favor selecciona el Cliente, Conductor y Placas para registrar la devolución.")
                 else:
+                    # Mapeo inteligente para que el Maestro registre la devolución al ID del dueño original
+                    cond_id_dev = dict_conductores[dev_conductor]
+                    owner_devolucion = dict_conductores_owner.get(cond_id_dev, usuario_id_activo)
+                    
                     datos_devolucion = {
-                        "user_id": usuario_id_activo,  # <--- LLAVE MAESTRA AÑADIDA PARA DEVOLUCIONES
+                        "user_id": owner_devolucion, 
                         "fecha_devolucion": dev_fecha.isoformat(),
                         "tipo_cliente": dev_cliente,
-                        "conductor_id": dict_conductores[dev_conductor],
+                        "conductor_id": cond_id_dev,
                         "unidad_id": dict_unidades[dev_unidad],
                         "paquetes_devueltos": int(dev_paquetes)
                     }
                     
                     try:
                         supabase.table("devoluciones").insert(datos_devolucion).execute()
-                        st.success(f"✅ ¡Devolución de {dev_paquetes} paquete(s) de {dev_cliente} registrada correctamente!")
+                        st.success(f"✅ ¡Devolución registrada correctamente en el expediente del proveedor!")
                     except Exception as e:
                         st.error(f"Error al registrar la devolución en la base de datos: {e}")
-
 
 # ===============================================
 # PESTAÑA 7: VERIFICACION DE CAPTURA Y EDICIÓN
@@ -766,7 +781,6 @@ with tab7:
     st.header("📊 Verificación de Captura y Edición")
     st.write("Consulta, verifica, modifica o elimina los despachos operativos registrados en el sistema.")
     
-    # --- FILTROS DE FECHA ---
     c_ini, c_fin = st.columns(2)
     with c_ini:
         fecha_inicio = st.date_input("Fecha de Inicio")
@@ -775,15 +789,19 @@ with tab7:
         
     if st.button("Buscar Capturas"):
         try:
-            # Filtro aplicado para traer solo los viajes registrados por el usuario activo
-            res_op = supabase.table("registro_operacion").select("*").eq("creado_por", usuario_id_activo).execute()
-            df_op = pd.DataFrame(res_op.data)
-            
-            if not df_op.empty:
-                # Filtros añadidos para que los diccionarios de edición también sean exclusivos del usuario
+            # --- INTERRUPTOR MAESTRO --- (Bypass completo de reportes operativos)
+            if nombre_usuario_activo == USUARIO_MAESTRO:
+                res_op = supabase.table("registro_operacion").select("*").execute()
+                cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").execute().data
+                unid_db = supabase.table("unidades").select("id_unidad, placas, tipo_unidad").execute().data
+            else:
+                res_op = supabase.table("registro_operacion").select("*").eq("creado_por", usuario_id_activo).execute()
                 cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").eq("creado_por", usuario_id_activo).execute().data
                 unid_db = supabase.table("unidades").select("id_unidad, placas, tipo_unidad").eq("creado_por", usuario_id_activo).execute().data
                 
+            df_op = pd.DataFrame(res_op.data)
+            
+            if not df_op.empty:
                 map_cond = {c["id_conductor"]: c["nombre_driver"] for c in cond_db}
                 map_unid = {u["id_unidad"]: u["placas"] for u in unid_db}
                 map_tipo_unid = {u["id_unidad"]: u.get("tipo_unidad", "N/A") for u in unid_db}
@@ -854,7 +872,7 @@ with tab7:
                                     unid_actual = row_data["Placas"]
                                     idx_unid = list(dict_unid_inv.keys()).index(unid_actual) if unid_actual in dict_unid_inv else 0
                                     nueva_unidad = st.selectbox("Vehículo (Placas)", list(dict_unid_inv.keys()), index=idx_unid)
-                                
+                                    
                                 with c_ed2:
                                     stat_actual = row_data.get("status_operacion", "En ruta")
                                     idx_stat = ["En ruta", "Cancelacion", "No show"].index(stat_actual) if stat_actual in ["En ruta", "Cancelacion", "No show"] else 0
@@ -862,7 +880,7 @@ with tab7:
                                     
                                     nuevos_paquetes = st.number_input("Paquetes", min_value=0, step=1, value=int(row_data.get("paquetes_cargados", 0)))
                                     nuevas_paradas = st.number_input("Paradas", min_value=0, step=1, value=int(row_data.get("paradas", 0)))
-                                
+                                    
                                 es_amb = True if row_data.get("ambulancia") == True else False
                                 nueva_ambulancia = st.checkbox("El servicio es Ambulancia", value=es_amb)
                                 
