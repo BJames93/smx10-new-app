@@ -495,6 +495,7 @@ with tab5:
             if res.data:
                 reg = res.data[0]
                 st.write(f"Conductor encontrado: **{reg['nombre_driver']}**")
+                st.write(f"Correo actual: **{reg.get('correo', 'No registrado')}**")
                 st.write(f"Celular actual: **{reg.get('celular', 'No registrado')}**")
                 banco_actual = reg.get('nombre_banco') or 'No registrado'
                 clabe_actual = reg.get('clabe_interbancaria') or 'No registrado'
@@ -519,9 +520,17 @@ with tab5:
                     cols[i % 3].write(f"{status} {nombre}")
                 st.write("---")
                 
-                opcion = st.selectbox("¿Qué deseas actualizar?", [""] + list(docs_map.keys()) + ["Actualizar Número de Celular", "Actualizar Datos Bancarios"], key="opcion_cond")
+                # --- SE AGREGÓ "Actualizar Correo Electrónico" AL MENÚ ---
+                opcion = st.selectbox("¿Qué deseas actualizar?", [""] + list(docs_map.keys()) + ["Actualizar Correo Electrónico", "Actualizar Número de Celular", "Actualizar Datos Bancarios"], key="opcion_cond")
                 
-                if opcion == "Actualizar Número de Celular":
+                # --- NUEVA LÓGICA PARA EL CORREO ---
+                if opcion == "Actualizar Correo Electrónico":
+                    nuevo_correo = st.text_input("Nuevo Correo Electrónico:", value=reg.get('correo') or "")
+                    if st.button("Guardar nuevo correo"):
+                        supabase.table("alta_conductor").update({"correo": nuevo_correo}).eq("rfc", rfc_busqueda.upper()).execute()
+                        st.success("¡Correo electrónico actualizado correctamente!")
+                
+                elif opcion == "Actualizar Número de Celular":
                     nuevo_celular = st.text_input("Nuevo número de celular:", value=reg.get('celular') or "")
                     if st.button("Guardar nuevo celular"):
                         supabase.table("alta_conductor").update({"celular": nuevo_celular}).eq("rfc", rfc_busqueda.upper()).execute()
