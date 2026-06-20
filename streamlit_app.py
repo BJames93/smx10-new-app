@@ -97,6 +97,34 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 # Mensaje lateral de bienvenida
 st.sidebar.success(f"👤 Conectado como: **{nombre_usuario_activo}**")
 
+# ==========================================
+# 👑 PANEL DE ADMINISTRADOR MAESTRO (SIDEBAR)
+# ==========================================
+creador_id = usuario_id_activo # Por defecto, la información se guarda a nombre de quien inició sesión
+
+if nombre_usuario_activo == USUARIO_MAESTRO:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 👑 Panel de Control VIP")
+    try:
+        # Extraemos a todos los usuarios registrados en el sistema
+        usuarios_db = supabase.table("usuarios_acceso").select("user_id, nombre_usuario").execute().data
+        dict_usuarios_master = {u["nombre_usuario"]: u["user_id"] for u in usuarios_db}
+        
+        usuario_elegido = st.sidebar.selectbox(
+            "Capturar datos a nombre de:", 
+            options=list(dict_usuarios_master.keys()),
+            index=list(dict_usuarios_master.keys()).index(nombre_usuario_activo) if nombre_usuario_activo in dict_usuarios_master else 0
+        )
+        
+        # Asignamos la llave del usuario seleccionado a la variable creador_id
+        creador_id = dict_usuarios_master[usuario_elegido]
+        
+        if usuario_elegido != nombre_usuario_activo:
+            st.sidebar.warning(f"⚠️ Atención: Los registros y altas que realices ahora quedarán en el expediente de **{usuario_elegido}**.")
+    except Exception as e:
+        st.sidebar.error("No se pudo cargar la lista de proveedores.")
+
+
 st.title("📊 Sistema Centralizado de Proveedores")
 
 # Reordenamiento de Tabs de acuerdo a la declaración oficial
@@ -163,7 +191,7 @@ with tab1:
                     "nombre_rl": rl_upper,
                     "banco_empresa": banco_upper,
                     "clabe_empresa": clabe_empresa,
-                    "creado_por": usuario_id_activo,
+                    "creado_por": creador_id, # <--- SE USA LA VARIABLE MAESTRA DEL SELECTOR
                     "url_ine_rl": url_ine,
                     "url_constancia_fiscal": url_csf,
                     "url_caratula_bancaria": url_cb,
@@ -244,7 +272,7 @@ with tab2:
                     "celular": celular,
                     "nombre_banco": banco,             
                     "clabe_interbancaria": clabe,
-                    "creado_por": usuario_id_activo,
+                    "creado_por": creador_id, # <--- SE USA LA VARIABLE MAESTRA DEL SELECTOR
                     "url_fotografia": u_foto,
                     "url_curp": u_curp,
                     "url_ine": u_ine,
@@ -322,7 +350,7 @@ with tab3:
                     "marca": m, 
                     "submarca": sm,
                     "tipo_unidad": tipo,
-                    "creado_por": usuario_id_activo,
+                    "creado_por": creador_id, # <--- SE USA LA VARIABLE MAESTRA DEL SELECTOR
                     "url_tarjeta_circulacion": u_circ,
                     "url_poliza_seguro": u_seg,
                     "url_vin": u_vin,
@@ -707,7 +735,8 @@ with tab6:
                     
                     # Asignación automática: si registra el Maestro, guarda el viaje al ID del dueño del conductor
                     cond_id_seleccionado = dict_conductores[sel_conductor]
-                    owner_operacion = dict_conductores_owner.get(cond_id_seleccionado, usuario_id_activo)
+                    # Si no encuentra el dueño (no debería pasar), usa el creador_id del selector lateral por seguridad
+                    owner_operacion = dict_conductores_owner.get(cond_id_seleccionado, creador_id)
                     
                     datos_operacion = {
                         "creado_por": owner_operacion, 
@@ -726,7 +755,7 @@ with tab6:
                     
                     try:
                         supabase.table("registro_operacion").insert(datos_operacion).execute()
-                        st.success(f"¡Viaje despachado correctamente! Guardado bajo la cuenta del proveedor.")
+                        st.success(f"¡Viaje despachado correctamente! Guardado bajo la cuenta del proveedor correspondiente.")
                     except Exception as e:
                         st.error(f"Error al registrar la operación en base de datos: {e}")
 
@@ -757,7 +786,7 @@ with tab6:
                 else:
                     # Mapeo inteligente para que el Maestro registre la devolución al ID del dueño original
                     cond_id_dev = dict_conductores[dev_conductor]
-                    owner_devolucion = dict_conductores_owner.get(cond_id_dev, usuario_id_activo)
+                    owner_devolucion = dict_conductores_owner.get(cond_id_dev, creador_id)
                     
                     datos_devolucion = {
                         "user_id": owner_devolucion, 
