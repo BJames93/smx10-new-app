@@ -79,8 +79,18 @@ def procesar_archivo(archivo, carpeta, identificador):
 usuario_id_activo = st.session_state["usuario_actual"]["user_id"]
 nombre_usuario_activo = st.session_state["usuario_actual"]["nombre_usuario"]
 
-# Por defecto, las operaciones se guardan bajo el ID de la sesión actual
-creador_id_dinamico = usuario_id_activo
+# --- PRECARGA BASE DE USUARIOS (SOLO PARA EL MAESTRO) ---
+mapa_usuarios_master = {}
+lista_nombres_usuarios = []
+
+if nombre_usuario_activo == USUARIO_MAESTRO:
+    try:
+        usuarios_db = supabase.table("usuarios_acceso").select("user_id, nombre_usuario").execute().data
+        if usuarios_db:
+            mapa_usuarios_master = {u["nombre_usuario"]: u["user_id"] for u in usuarios_db}
+            lista_nombres_usuarios = list(mapa_usuarios_master.keys())
+    except Exception as e:
+        st.error(f"Error crítico al inicializar lista de usuarios maestros: {e}")
 
 # --- INTERFAZ PRINCIPAL ---
 st.set_page_config(page_title="Plataforma BoulderBrwn", page_icon="🚀", layout="wide")
@@ -100,38 +110,6 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 # Mensaje lateral de bienvenida permanente
 st.sidebar.success(f"👤 Conectado como: **{nombre_usuario_activo}**")
 
-# =======================================================
-# 👑 CONTROL DE VISIBILIDAD EXCLUSIVO PARA USUARIO MAESTRO
-# =======================================================
-if nombre_usuario_activo == USUARIO_MAESTRO:
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 👑 Panel de Control Maestro")
-    try:
-        # Consultamos dinámicamente la lista de usuarios registrados
-        usuarios_db = supabase.table("usuarios_acceso").select("user_id, nombre_usuario").execute().data
-        if usuarios_db:
-            # Creamos el mapa seguro: nombre_usuario -> user_id
-            mapa_usuarios_master = {u["nombre_usuario"]: u["user_id"] for u in usuarios_db}
-            lista_nombres_usuarios = list(mapa_usuarios_master.keys())
-            
-            # Selector basado en el nombre del usuario
-            usuario_seleccionado = st.sidebar.selectbox(
-                "Asignar registros al usuario:",
-                options=lista_nombres_usuarios,
-                index=lista_nombres_usuarios.index(nombre_usuario_activo) if nombre_usuario_activo in lista_nombres_usuarios else 0
-            )
-            
-            # Sobrescribimos el ID del creador según la selección del administrador maestro
-            creador_id_dinamico = mapa_usuarios_master[usuario_seleccionado]
-            
-            # Alerta visual para evitar errores de captura accidental
-            if usuario_seleccionado != nombre_usuario_activo:
-                st.sidebar.warning(f"⚠️ Capturando a nombre de: **{usuario_seleccionado}**")
-            else:
-                st.sidebar.info("Capturando con tu propia cuenta maestra.")
-    except Exception as e:
-        st.sidebar.error(f"Error al enlazar control de usuarios: {e}")
-
 st.title("📊 Sistema Centralizado de Proveedores")
 
 # Reordenamiento de Tabs de acuerdo a la declaración oficial
@@ -146,6 +124,15 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
 # ==========================================
 with tab1:
     st.header("🏢 Alta y Registro de Empresa")
+    
+    # Asignación por defecto al usuario activo de la sesión
+    creador_id_tab1 = usuario_id_activo
+    if nombre_usuario_activo == USUARIO_MAESTRO and lista_nombres_usuarios:
+        user_sel_tab1 = st.selectbox("👑 Asignar esta Empresa al Usuario:", options=lista_nombres_usuarios, index=lista_nombres_usuarios.index(nombre_usuario_activo) if nombre_usuario_activo in lista_nombres_usuarios else 0, key="user_sel_tab1")
+        creador_id_tab1 = mapa_usuarios_master[user_sel_tab1]
+        st.caption(f"Capturando empresa vinculada a la cuenta de: **{user_sel_tab1}**")
+        st.write("---")
+
     with st.form("form_empresa", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
@@ -198,7 +185,7 @@ with tab1:
                     "nombre_rl": rl_upper,
                     "banco_empresa": banco_upper,
                     "clabe_empresa": clabe_empresa,
-                    "creado_por": creador_id_dinamico,  # Usa el ID dinámico del selector maestro
+                    "creado_por": creador_id_tab1,
                     "url_ine_rl": url_ine,
                     "url_constancia_fiscal": url_csf,
                     "url_caratula_bancaria": url_cb,
@@ -215,6 +202,15 @@ with tab1:
 # PESTAÑA 2: ALTA DE CONDUCTOR
 # ==========================================
 with tab2:
+    st.header("🚗 Alta de Conductor")
+    
+    creador_id_tab2 = usuario_id_activo
+    if nombre_usuario_activo == USUARIO_MAESTRO and lista_nombres_usuarios:
+        user_sel_tab2 = st.selectbox("👑 Asignar este Conductor al Usuario:", options=lista_nombres_usuarios, index=lista_nombres_usuarios.index(nombre_usuario_activo) if nombre_usuario_activo in lista_nombres_usuarios else 0, key="user_sel_tab2")
+        creador_id_tab2 = mapa_usuarios_master[user_sel_tab2]
+        st.caption(f"Capturando conductor vinculado a la cuenta de: **{user_sel_tab2}**")
+        st.write("---")
+
     with st.form("form_conductor", clear_on_submit=True):
         st.subheader("📝 Datos Generales")
         col1, col2 = st.columns(2)
@@ -279,7 +275,7 @@ with tab2:
                     "celular": celular,
                     "nombre_banco": banco,             
                     "clabe_interbancaria": clabe,
-                    "creado_por": creador_id_dinamico,  # Usa el ID dinámico del selector maestro
+                    "creado_por": creador_id_tab2,
                     "url_fotografia": u_foto,
                     "url_curp": u_curp,
                     "url_ine": u_ine,
@@ -300,6 +296,14 @@ with tab2:
 # ==========================================
 with tab3:
     st.header("🚛 Registro y Control de Unidades")
+    
+    creador_id_tab3 = usuario_id_activo
+    if nombre_usuario_activo == USUARIO_MAESTRO and lista_nombres_usuarios:
+        user_sel_tab3 = st.selectbox("👑 Asignar esta Unidad al Usuario:", options=lista_nombres_usuarios, index=lista_nombres_usuarios.index(nombre_usuario_activo) if nombre_usuario_activo in lista_nombres_usuarios else 0, key="user_sel_tab3")
+        creador_id_tab3 = mapa_usuarios_master[user_sel_tab3]
+        st.caption(f"Capturando vehículo vinculado a la cuenta de: **{user_sel_tab3}**")
+        st.write("---")
+
     st.write("Ingresa los datos del vehículo y carga la documentación junto con las fotografías de inspección.")
     
     with st.form("form_unidades", clear_on_submit=True):
@@ -355,7 +359,7 @@ with tab3:
                     "marca": m, 
                     "submarca": sm,
                     "tipo_unidad": tipo,
-                    "creado_por": creador_id_dinamico,  # Usa el ID dinámico del selector maestro
+                    "creado_por": creador_id_tab3,
                     "url_tarjeta_circulacion": u_circ,
                     "url_poliza_seguro": u_seg,
                     "url_vin": u_vin,
@@ -376,6 +380,11 @@ with tab3:
 # ==========================================
 with tab4:
     st.header("🔍 Consulta Integral de Expedientes")
+    
+    if nombre_usuario_activo == USUARIO_MAESTRO and lista_nombres_usuarios:
+        user_sel_tab4 = st.selectbox("👑 Filtrar Consulta General por Proveedor:", options=["MOSTRAR TODOS"] + lista_nombres_usuarios, key="user_sel_tab4")
+        st.write("---")
+
     tipo_consulta = st.radio("¿Qué desea consultar?", ["Conductores", "Unidades"], horizontal=True)
     
     def generar_zip(diccionario_documentos):
@@ -396,7 +405,10 @@ with tab4:
     if tipo_consulta == "Conductores":
         try:
             if nombre_usuario_activo == USUARIO_MAESTRO:
-                res = supabase.table("alta_conductor").select("*").execute()
+                if user_sel_tab4 == "MOSTRAR TODOS":
+                    res = supabase.table("alta_conductor").select("*").execute()
+                else:
+                    res = supabase.table("alta_conductor").select("*").eq("creado_por", mapa_usuarios_master[user_sel_tab4]).execute()
             else:
                 res = supabase.table("alta_conductor").select("*").eq("creado_por", usuario_id_activo).execute()
             
@@ -453,14 +465,17 @@ with tab4:
                                     mime="application/zip"
                                 )
             else:
-                st.info("No se encontraron conductores registrados.")
+                st.info("No se encontraron conductores registrados para este criterio.")
         except Exception as e:
             st.error(f"Error cargando conductores: {e}")
 
     else:
         try:
             if nombre_usuario_activo == USUARIO_MAESTRO:
-                res = supabase.table("unidades").select("*").execute()
+                if user_sel_tab4 == "MOSTRAR TODOS":
+                    res = supabase.table("unidades").select("*").execute()
+                else:
+                    res = supabase.table("unidades").select("*").eq("creado_por", mapa_usuarios_master[user_sel_tab4]).execute()
             else:
                 res = supabase.table("unidades").select("*").eq("creado_por", usuario_id_activo).execute()
                 
@@ -510,7 +525,7 @@ with tab4:
                                 mime="application/zip"
                             )
             else:
-                st.info("No se encontraron unidades registradas.")
+                st.info("No se encontraron unidades registradas para este criterio.")
         except Exception as e:
             st.error(f"Error cargando unidades: {e}")
 
@@ -519,8 +534,12 @@ with tab4:
 # ===============================================
 with tab5:
     st.header("🔄 Actualización de Expedientes")
-    st.info("Utiliza esta sección para subir documentos faltantes, renovaciones o actualizar datos de conductores y unidades.")
     
+    if nombre_usuario_activo == USUARIO_MAESTRO and lista_nombres_usuarios:
+        user_sel_tab5 = st.selectbox("👑 Filtrar Actualizaciones por Cuenta de Usuario:", options=["MOSTRAR TODOS"] + lista_nombres_usuarios, key="user_sel_tab5")
+        st.write("---")
+
+    st.info("Utiliza esta sección para subir documentos faltantes, renovaciones o actualizar datos de conductores y unidades.")
     tipo_expediente = st.radio("Selecciona el tipo de expediente a gestionar:", ["Conductores", "Unidades"], horizontal=True)
     st.write("---")
     
@@ -529,7 +548,10 @@ with tab5:
         
         if rfc_busqueda:
             if nombre_usuario_activo == USUARIO_MAESTRO:
-                res = supabase.table("alta_conductor").select("*").eq("rfc", rfc_busqueda.upper()).execute()
+                if user_sel_tab5 == "MOSTRAR TODOS":
+                    res = supabase.table("alta_conductor").select("*").eq("rfc", rfc_busqueda.upper()).execute()
+                else:
+                    res = supabase.table("alta_conductor").select("*").eq("rfc", rfc_busqueda.upper()).eq("creado_por", mapa_usuarios_master[user_sel_tab5]).execute()
             else:
                 res = supabase.table("alta_conductor").select("*").eq("rfc", rfc_busqueda.upper()).eq("creado_por", usuario_id_activo).execute()
             
@@ -605,14 +627,17 @@ with tab5:
                         else:
                             st.warning("Por favor selecciona un archivo.")
             else:
-                st.error("No se encontró ningún conductor con ese RFC en tu cuenta o sistema.")
+                st.error("No se encontró ningún conductor bajo los parámetros o cuenta establecida.")
 
     elif tipo_expediente == "Unidades":
         placas_busqueda = st.text_input("Ingresa las Placas de la unidad para actualizar:")
         
         if placas_busqueda:
             if nombre_usuario_activo == USUARIO_MAESTRO:
-                res_u = supabase.table("unidades").select("*").eq("placas", placas_busqueda.upper()).execute()
+                if user_sel_tab5 == "MOSTRAR TODOS":
+                    res_u = supabase.table("unidades").select("*").eq("placas", placas_busqueda.upper()).execute()
+                else:
+                    res_u = supabase.table("unidades").select("*").eq("placas", placas_busqueda.upper()).eq("creado_por", mapa_usuarios_master[user_sel_tab5]).execute()
             else:
                 res_u = supabase.table("unidades").select("*").eq("placas", placas_busqueda.upper()).eq("creado_por", usuario_id_activo).execute()
             
@@ -664,6 +689,15 @@ with tab5:
 # ==========================================
 with tab6:
     st.header("Captura Dinámica de Despacho Operativo")
+    
+    # Menú Maestro para filtrar qué flotilla se carga y bajo quién se guardan devoluciones sin dueño previo
+    creador_id_tab6 = usuario_id_activo
+    if nombre_usuario_activo == USUARIO_MAESTRO and lista_nombres_usuarios:
+        user_sel_tab6 = st.selectbox("👑 Filtrar Flotilla Visible por Cuenta de Usuario:", options=["MOSTRAR TODOS"] + lista_nombres_usuarios, key="user_sel_tab6")
+        if user_sel_tab6 != "MOSTRAR TODOS":
+            creador_id_tab6 = mapa_usuarios_master[user_sel_tab6]
+        st.write("---")
+
     st.write("Módulo relacional. Permite enlazar los conductores y unidades activos en sistema.")
     
     dict_conductores = {}
@@ -672,8 +706,12 @@ with tab6:
     
     try:
         if nombre_usuario_activo == USUARIO_MAESTRO:
-            conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").execute().data
-            unidades_db = supabase.table("unidades").select("id_unidad, placas").execute().data
+            if user_sel_tab6 == "MOSTRAR TODOS":
+                conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").execute().data
+                unidades_db = supabase.table("unidades").select("id_unidad, placas").execute().data
+            else:
+                conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").eq("creado_por", creador_id_tab6).execute().data
+                unidades_db = supabase.table("unidades").select("id_unidad, placas").eq("creado_por", creador_id_tab6).execute().data
         else:
             conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").eq("creado_por", usuario_id_activo).execute().data
             unidades_db = supabase.table("unidades").select("id_unidad, placas").eq("creado_por", usuario_id_activo).execute().data
@@ -685,7 +723,7 @@ with tab6:
         st.error(f"Error de sincronización con Supabase: {e}")
 
     if not dict_conductores or not dict_unidades:
-        st.warning("⚠️ Atención: Debes tener conductores y unidades registrados para operar.")
+        st.warning("⚠️ Atención: No se encontraron conductores o unidades disponibles para el usuario seleccionado.")
     else:
         # =======================================================
         # MÓDULO 1: REGISTRO DE OPERACIÓN (DESPACHO)
@@ -732,8 +770,8 @@ with tab6:
                     iso_salida = datetime.combine(fecha_salida, hora_salida).isoformat()
                     
                     cond_id_seleccionado = dict_conductores[sel_conductor]
-                    # Vincula al propietario original o al ID dinámico elegido en la barra lateral
-                    owner_operacion = dict_conductores_owner.get(cond_id_seleccionado, creador_id_dinamico)
+                    # Asignación automática inteligente: se guarda al dueño original del conductor asignado
+                    owner_operacion = dict_conductores_owner.get(cond_id_seleccionado, creador_id_tab6)
                     
                     datos_operacion = {
                         "creado_por": owner_operacion, 
@@ -752,7 +790,7 @@ with tab6:
                     
                     try:
                         supabase.table("registro_operacion").insert(datos_operacion).execute()
-                        st.success(f"¡Viaje despachado correctamente! Guardado bajo la cuenta del proveedor.")
+                        st.success(f"¡Viaje despachado correctamente! Guardado bajo la cuenta del proveedor original.")
                     except Exception as e:
                         st.error(f"Error al registrar la operación en base de datos: {e}")
 
@@ -782,7 +820,7 @@ with tab6:
                     st.error("⚠️ Por favor selecciona el Cliente, Conductor y Placas para registrar la devolución.")
                 else:
                     cond_id_dev = dict_conductores[dev_conductor]
-                    owner_devolucion = dict_conductores_owner.get(cond_id_dev, creador_id_dinamico)
+                    owner_devolucion = dict_conductores_owner.get(cond_id_dev, creador_id_tab6)
                     
                     datos_devolucion = {
                         "user_id": owner_devolucion, 
@@ -795,7 +833,7 @@ with tab6:
                     
                     try:
                         supabase.table("devoluciones").insert(datos_devolucion).execute()
-                        st.success(f"✅ ¡Devolución registrada correctamente en el expediente del proveedor!")
+                        st.success(f"✅ ¡Devolución registrada correctamente!")
                     except Exception as e:
                         st.error(f"Error al registrar la devolución en la base de datos: {e}")
 
@@ -804,6 +842,11 @@ with tab6:
 # ===============================================
 with tab7:
     st.header("📊 Verificación de Captura y Edición")
+    
+    if nombre_usuario_activo == USUARIO_MAESTRO and lista_nombres_usuarios:
+        user_sel_tab7 = st.selectbox("👑 Filtrar Reportes y Tablas Operativas por Usuario:", options=["MOSTRAR TODOS"] + lista_nombres_usuarios, key="user_sel_tab7")
+        st.write("---")
+
     st.write("Consulta, verifica, modifica o elimina los despachos operativos registrados en el sistema.")
     
     c_ini, c_fin = st.columns(2)
@@ -815,9 +858,15 @@ with tab7:
     if st.button("Buscar Capturas"):
         try:
             if nombre_usuario_activo == USUARIO_MAESTRO:
-                res_op = supabase.table("registro_operacion").select("*").execute()
-                cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").execute().data
-                unid_db = supabase.table("unidades").select("id_unidad, placas, tipo_unidad").execute().data
+                if user_sel_tab7 == "MOSTRAR TODOS":
+                    res_op = supabase.table("registro_operacion").select("*").execute()
+                    cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").execute().data
+                    unid_db = supabase.table("unidades").select("id_unidad, placas, tipo_unidad").execute().data
+                else:
+                    target_uid = mapa_usuarios_master[user_sel_tab7]
+                    res_op = supabase.table("registro_operacion").select("*").eq("creado_por", target_uid).execute()
+                    cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").eq("creado_por", target_uid).execute().data
+                    unid_db = supabase.table("unidades").select("id_unidad, placas, tipo_unidad").eq("creado_por", target_uid).execute().data
             else:
                 res_op = supabase.table("registro_operacion").select("*").eq("creado_por", usuario_id_activo).execute()
                 cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").eq("creado_por", usuario_id_activo).execute().data
