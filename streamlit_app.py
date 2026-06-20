@@ -79,6 +79,9 @@ def procesar_archivo(archivo, carpeta, identificador):
 usuario_id_activo = st.session_state["usuario_actual"]["user_id"]
 nombre_usuario_activo = st.session_state["usuario_actual"]["nombre_usuario"]
 
+# Por defecto, las operaciones se guardan bajo el ID de la sesión actual
+creador_id_dinamico = usuario_id_activo
+
 # --- INTERFAZ PRINCIPAL ---
 st.set_page_config(page_title="Plataforma BoulderBrwn", page_icon="🚀", layout="wide")
 
@@ -94,36 +97,40 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# Mensaje lateral de bienvenida
+# Mensaje lateral de bienvenida permanente
 st.sidebar.success(f"👤 Conectado como: **{nombre_usuario_activo}**")
 
-# ==========================================
-# 👑 PANEL DE ADMINISTRADOR MAESTRO (SIDEBAR)
-# ==========================================
-creador_id = usuario_id_activo # Por defecto, la información se guarda a nombre de quien inició sesión
-
+# =======================================================
+# 👑 CONTROL DE VISIBILIDAD EXCLUSIVO PARA USUARIO MAESTRO
+# =======================================================
 if nombre_usuario_activo == USUARIO_MAESTRO:
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 👑 Panel de Control VIP")
+    st.sidebar.markdown("### 👑 Panel de Control Maestro")
     try:
-        # Extraemos a todos los usuarios registrados en el sistema
+        # Consultamos dinámicamente la lista de usuarios registrados
         usuarios_db = supabase.table("usuarios_acceso").select("user_id, nombre_usuario").execute().data
-        dict_usuarios_master = {u["nombre_usuario"]: u["user_id"] for u in usuarios_db}
-        
-        usuario_elegido = st.sidebar.selectbox(
-            "Capturar datos a nombre de:", 
-            options=list(dict_usuarios_master.keys()),
-            index=list(dict_usuarios_master.keys()).index(nombre_usuario_activo) if nombre_usuario_activo in dict_usuarios_master else 0
-        )
-        
-        # Asignamos la llave del usuario seleccionado a la variable creador_id
-        creador_id = dict_usuarios_master[usuario_elegido]
-        
-        if usuario_elegido != nombre_usuario_activo:
-            st.sidebar.warning(f"⚠️ Atención: Los registros y altas que realices ahora quedarán en el expediente de **{usuario_elegido}**.")
+        if usuarios_db:
+            # Creamos el mapa seguro: nombre_usuario -> user_id
+            mapa_usuarios_master = {u["nombre_usuario"]: u["user_id"] for u in usuarios_db}
+            lista_nombres_usuarios = list(mapa_usuarios_master.keys())
+            
+            # Selector basado en el nombre del usuario
+            usuario_seleccionado = st.sidebar.selectbox(
+                "Asignar registros al usuario:",
+                options=lista_nombres_usuarios,
+                index=lista_nombres_usuarios.index(nombre_usuario_activo) if nombre_usuario_activo in lista_nombres_usuarios else 0
+            )
+            
+            # Sobrescribimos el ID del creador según la selección del administrador maestro
+            creador_id_dinamico = mapa_usuarios_master[usuario_seleccionado]
+            
+            # Alerta visual para evitar errores de captura accidental
+            if usuario_seleccionado != nombre_usuario_activo:
+                st.sidebar.warning(f"⚠️ Capturando a nombre de: **{usuario_seleccionado}**")
+            else:
+                st.sidebar.info("Capturando con tu propia cuenta maestra.")
     except Exception as e:
-        st.sidebar.error("No se pudo cargar la lista de proveedores.")
-
+        st.sidebar.error(f"Error al enlazar control de usuarios: {e}")
 
 st.title("📊 Sistema Centralizado de Proveedores")
 
@@ -191,7 +198,7 @@ with tab1:
                     "nombre_rl": rl_upper,
                     "banco_empresa": banco_upper,
                     "clabe_empresa": clabe_empresa,
-                    "creado_por": creador_id, # <--- SE USA LA VARIABLE MAESTRA DEL SELECTOR
+                    "creado_por": creador_id_dinamico,  # Usa el ID dinámico del selector maestro
                     "url_ine_rl": url_ine,
                     "url_constancia_fiscal": url_csf,
                     "url_caratula_bancaria": url_cb,
@@ -272,7 +279,7 @@ with tab2:
                     "celular": celular,
                     "nombre_banco": banco,             
                     "clabe_interbancaria": clabe,
-                    "creado_por": creador_id, # <--- SE USA LA VARIABLE MAESTRA DEL SELECTOR
+                    "creado_por": creador_id_dinamico,  # Usa el ID dinámico del selector maestro
                     "url_fotografia": u_foto,
                     "url_curp": u_curp,
                     "url_ine": u_ine,
@@ -332,12 +339,10 @@ with tab3:
             else:
                 placas_up = p.upper()
                 
-                # Almacenamiento de documentos en sus respectivas carpetas
                 u_circ = procesar_archivo(f_circ, "unidades/tarjetas", placas_up)
                 u_seg = procesar_archivo(f_seg, "unidades/polizas", placas_up)
                 u_vin = procesar_archivo(f_vin, "unidades/vin", placas_up)
                 
-                # Almacenamiento unificado de las 4 fotos en la misma carpeta física del bucket
                 carpeta_inspeccion = "unidades/fotos_inspeccion"
                 u_frontal = procesar_archivo(f_frontal, carpeta_inspeccion, f"{placas_up}_FRONTAL")
                 u_trasera = procesar_archivo(f_trasera, carpeta_inspeccion, f"{placas_up}_TRASERA")
@@ -350,7 +355,7 @@ with tab3:
                     "marca": m, 
                     "submarca": sm,
                     "tipo_unidad": tipo,
-                    "creado_por": creador_id, # <--- SE USA LA VARIABLE MAESTRA DEL SELECTOR
+                    "creado_por": creador_id_dinamico,  # Usa el ID dinámico del selector maestro
                     "url_tarjeta_circulacion": u_circ,
                     "url_poliza_seguro": u_seg,
                     "url_vin": u_vin,
@@ -390,7 +395,6 @@ with tab4:
 
     if tipo_consulta == "Conductores":
         try:
-            # --- INTERRUPTOR MAESTRO ---
             if nombre_usuario_activo == USUARIO_MAESTRO:
                 res = supabase.table("alta_conductor").select("*").execute()
             else:
@@ -455,7 +459,6 @@ with tab4:
 
     else:
         try:
-            # --- INTERRUPTOR MAESTRO ---
             if nombre_usuario_activo == USUARIO_MAESTRO:
                 res = supabase.table("unidades").select("*").execute()
             else:
@@ -525,7 +528,6 @@ with tab5:
         rfc_busqueda = st.text_input("Ingresa el RFC del conductor para actualizar:")
         
         if rfc_busqueda:
-            # --- INTERRUPTOR MAESTRO ---
             if nombre_usuario_activo == USUARIO_MAESTRO:
                 res = supabase.table("alta_conductor").select("*").eq("rfc", rfc_busqueda.upper()).execute()
             else:
@@ -609,7 +611,6 @@ with tab5:
         placas_busqueda = st.text_input("Ingresa las Placas de la unidad para actualizar:")
         
         if placas_busqueda:
-            # --- INTERRUPTOR MAESTRO ---
             if nombre_usuario_activo == USUARIO_MAESTRO:
                 res_u = supabase.table("unidades").select("*").eq("placas", placas_busqueda.upper()).execute()
             else:
@@ -670,7 +671,6 @@ with tab6:
     dict_conductores_owner = {}
     
     try:
-        # --- INTERRUPTOR MAESTRO --- (Bypass inteligente para jalar toda la flotilla o solo la propia)
         if nombre_usuario_activo == USUARIO_MAESTRO:
             conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").execute().data
             unidades_db = supabase.table("unidades").select("id_unidad, placas").execute().data
@@ -678,10 +678,8 @@ with tab6:
             conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").eq("creado_por", usuario_id_activo).execute().data
             unidades_db = supabase.table("unidades").select("id_unidad, placas").eq("creado_por", usuario_id_activo).execute().data
         
-        # Mapeos seguros
         dict_conductores = {c["nombre_driver"]: c["id_conductor"] for c in conductores_db}
         dict_unidades = {u["placas"]: u["id_unidad"] for u in unidades_db}
-        # Diccionario clave: Guarda quién es el dueño original de cada conductor
         dict_conductores_owner = {c["id_conductor"]: c.get("creado_por") for c in conductores_db}
     except Exception as e:
         st.error(f"Error de sincronización con Supabase: {e}")
@@ -733,10 +731,9 @@ with tab6:
                     iso_llegada = datetime.combine(fecha_llegada, hora_llegada).isoformat()
                     iso_salida = datetime.combine(fecha_salida, hora_salida).isoformat()
                     
-                    # Asignación automática: si registra el Maestro, guarda el viaje al ID del dueño del conductor
                     cond_id_seleccionado = dict_conductores[sel_conductor]
-                    # Si no encuentra el dueño (no debería pasar), usa el creador_id del selector lateral por seguridad
-                    owner_operacion = dict_conductores_owner.get(cond_id_seleccionado, creador_id)
+                    # Vincula al propietario original o al ID dinámico elegido en la barra lateral
+                    owner_operacion = dict_conductores_owner.get(cond_id_seleccionado, creador_id_dinamico)
                     
                     datos_operacion = {
                         "creado_por": owner_operacion, 
@@ -755,7 +752,7 @@ with tab6:
                     
                     try:
                         supabase.table("registro_operacion").insert(datos_operacion).execute()
-                        st.success(f"¡Viaje despachado correctamente! Guardado bajo la cuenta del proveedor correspondiente.")
+                        st.success(f"¡Viaje despachado correctamente! Guardado bajo la cuenta del proveedor.")
                     except Exception as e:
                         st.error(f"Error al registrar la operación en base de datos: {e}")
 
@@ -784,9 +781,8 @@ with tab6:
                 if not dev_cliente or not dev_conductor or not dev_unidad:
                     st.error("⚠️ Por favor selecciona el Cliente, Conductor y Placas para registrar la devolución.")
                 else:
-                    # Mapeo inteligente para que el Maestro registre la devolución al ID del dueño original
                     cond_id_dev = dict_conductores[dev_conductor]
-                    owner_devolucion = dict_conductores_owner.get(cond_id_dev, creador_id)
+                    owner_devolucion = dict_conductores_owner.get(cond_id_dev, creador_id_dinamico)
                     
                     datos_devolucion = {
                         "user_id": owner_devolucion, 
@@ -818,7 +814,6 @@ with tab7:
         
     if st.button("Buscar Capturas"):
         try:
-            # --- INTERRUPTOR MAESTRO --- (Bypass completo de reportes operativos)
             if nombre_usuario_activo == USUARIO_MAESTRO:
                 res_op = supabase.table("registro_operacion").select("*").execute()
                 cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").execute().data
