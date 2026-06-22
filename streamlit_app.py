@@ -703,8 +703,15 @@ with tab6:
     dict_conductores = {}
     dict_unidades = {}
     dict_conductores_owner = {}
+    lista_hubs_svc = [""] # Inicializamos con opción vacía por seguridad
     
     try:
+        # --- CARGA DINÁMICA DE SITES/HUBS (TABLA SVC) ---
+        hubs_db = supabase.table("hubs_svc").select("svc").order("svc", ascending=True).execute().data
+        if hubs_db:
+            lista_hubs_svc = [""] + [h["svc"] for h in hubs_db]
+
+        # --- CARGA DE FLOTILLAS ---
         if nombre_usuario_activo == USUARIO_MAESTRO:
             if user_sel_tab6 == "MOSTRAR TODOS":
                 conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").execute().data
@@ -741,6 +748,8 @@ with tab6:
                 monto_ambulancia = st.number_input("Costo Ambulancia ($)", min_value=0.0, value=0.0, step=100.0)
             
             with col2:
+                # LISTA DESPLEGABLE DINÁMICA (SVC) UBICADA ARRIBA DE PAQUETES CARGADOS
+                sel_svc = st.selectbox("Seleccione el HUB (SVC) de Servicio *", options=lista_hubs_svc)
                 paquetes = st.number_input("Cantidad de Paquetes Cargados", min_value=0, step=1, value=0)
                 paradas = st.number_input("Número de Paradas Planificadas (Ruta)", min_value=0, step=1, value=0)
                 
@@ -763,14 +772,13 @@ with tab6:
                 st.info("🧹 Formulario reiniciado a sus valores por defecto.")
             
             if enviar_operacion:
-                if not tipo_cliente or not sel_conductor or not sel_unidad:
-                    st.error("Por favor selecciona el Tipo de Cliente, el Conductor y el Vehículo válidos para despachar.")
+                if not tipo_cliente or not sel_conductor or not sel_unidad or not sel_svc:
+                    st.error("Por favor completa los campos obligatorios: Cliente, Conductor, Vehículo y HUB (SVC).")
                 else:
                     iso_llegada = datetime.combine(fecha_llegada, hora_llegada).isoformat()
                     iso_salida = datetime.combine(fecha_salida, hora_salida).isoformat()
                     
                     cond_id_seleccionado = dict_conductores[sel_conductor]
-                    # Asignación automática inteligente: se guarda al dueño original del conductor asignado
                     owner_operacion = dict_conductores_owner.get(cond_id_seleccionado, creador_id_tab6)
                     
                     datos_operacion = {
@@ -785,12 +793,13 @@ with tab6:
                         "paradas": int(paradas),
                         "ambulancia": es_ambulancia,
                         "costal": es_costal,
-                        "costo_ambulancia_variable": float(monto_ambulancia)
+                        "costo_ambulancia_variable": float(monto_ambulancia),
+                        "svc": sel_svc  # Se inserta el HUB seleccionado por el proveedor
                     }
                     
                     try:
                         supabase.table("registro_operacion").insert(datos_operacion).execute()
-                        st.success(f"¡Viaje despachado correctamente! Guardado bajo la cuenta del proveedor original.")
+                        st.success(f"¡Viaje despachado correctamente en {sel_svc}! Guardado bajo la cuenta del proveedor original.")
                     except Exception as e:
                         st.error(f"Error al registrar la operación en base de datos: {e}")
 
@@ -836,7 +845,6 @@ with tab6:
                         st.success(f"✅ ¡Devolución registrada correctamente!")
                     except Exception as e:
                         st.error(f"Error al registrar la devolución en la base de datos: {e}")
-
 # ===============================================
 # PESTAÑA 7: VERIFICACION DE CAPTURA Y EDICIÓN
 # ===============================================
