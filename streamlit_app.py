@@ -707,7 +707,7 @@ with tab6:
     
     try:
         # --- CARGA DINÁMICA DE SITES/HUBS (TABLA SVC) ---
-        hubs_db = supabase.table("hubs_svc").select("svc").order("svc", ascending=True).execute().data
+        hubs_db = supabase.table("hubs_svc").select("svc").order("svc", desc=False).execute().data
         if hubs_db:
             lista_hubs_svc = [""] + [h["svc"] for h in hubs_db]
 
