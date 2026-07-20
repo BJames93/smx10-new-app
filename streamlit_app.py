@@ -125,7 +125,6 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
 with tab1:
     st.header("🏢 Alta y Registro de Empresa")
     
-    # Asignación por defecto al usuario activo de la sesión
     creador_id_tab1 = usuario_id_activo
     if nombre_usuario_activo == USUARIO_MAESTRO and lista_nombres_usuarios:
         user_sel_tab1 = st.selectbox("👑 Asignar esta Empresa al Usuario:", options=lista_nombres_usuarios, index=lista_nombres_usuarios.index(nombre_usuario_activo) if nombre_usuario_activo in lista_nombres_usuarios else 0, key="user_sel_tab1")
@@ -376,7 +375,7 @@ with tab3:
                     st.error(f"Error al registrar la unidad en la base de datos: {e}")
 
 # ==========================================
-# PESTAÑA 4: CONSULTA DE EXPEDIENTES
+# PESTAÑA 4: CONSULTA DE EXPEDIENTES (INTEGRADA)
 # ==========================================
 with tab4:
     st.header("🔍 Consulta Integral de Expedientes")
@@ -385,7 +384,12 @@ with tab4:
         user_sel_tab4 = st.selectbox("👑 Filtrar Consulta General por Proveedor:", options=["MOSTRAR TODOS"] + lista_nombres_usuarios, key="user_sel_tab4")
         st.write("---")
 
-    tipo_consulta = st.radio("¿Qué desea consultar?", ["Conductores", "Unidades"], horizontal=True)
+    # --- CONTROL DE ACCESO EXCLUSIVO MASTER ---
+    opciones_consulta = ["Conductores", "Unidades"]
+    if nombre_usuario_activo == USUARIO_MAESTRO:
+        opciones_consulta.append("Empresas")
+        
+    tipo_consulta = st.radio("¿Qué desea consultar?", opciones_consulta, horizontal=True)
     
     def generar_zip(diccionario_documentos):
         zip_buffer = io.BytesIO()
@@ -402,7 +406,78 @@ with tab4:
                     pass
         return zip_buffer.getvalue()
 
-    if tipo_consulta == "Conductores":
+    # --- BLOQUE NUEVO: CONSULTA DE EMPRESAS (SÓLO ADMIN) ---
+    if tipo_consulta == "Empresas":
+        try:
+            if user_sel_tab4 == "MOSTRAR TODOS":
+                res_emp = supabase.table("registro_empresa").select("*").execute()
+            else:
+                res_emp = supabase.table("registro_empresa").select("*").eq("creado_por", mapa_usuarios_master[user_sel_tab4]).execute()
+                
+            df_emp = pd.DataFrame(res_emp.data)
+            
+            if not df_emp.empty:
+                df_emp['nombre_empresa'] = df_emp['nombre_empresa'].fillna("").astype(str)
+                lista_empresas = [""] + df_emp['nombre_empresa'].tolist()
+                sel_empresa = st.selectbox("Seleccione una Empresa para verificar:", options=lista_empresas)
+                
+                if sel_empresa:
+                    fila_emp = df_emp[df_emp['nombre_empresa'] == sel_empresa]
+                    if not fila_emp.empty:
+                        reg_emp = fila_emp.iloc[0].to_dict()
+                        
+                        st.subheader(f"🏢 Registro Corporativo: {sel_empresa}")
+                        
+                        col_info1, col_info2 = st.columns(2)
+                        with col_info1:
+                            st.markdown(f"""
+                            * **Nombre del Representante Legal (RL):** {reg_emp.get('nombre_rl', 'N/A')}
+                            * **RFC de la Empresa:** `{reg_emp.get('RFC', 'N/A')}`
+                            """)
+                        with col_info2:
+                            st.markdown(f"""
+                            * **Institución Bancaria:** {reg_emp.get('banco_empresa', 'N/A')}
+                            * **Cuenta CLABE:** `{reg_emp.get('clabe_empresa', 'N/A')}`
+                            """)
+                            
+                        st.write("---")
+                        st.write("### 📂 Estatus de Expediente Legal y Documentos")
+                        
+                        docs_emp = {
+                            "Identificación Oficial (INE RL)": "url_ine_rl",
+                            "Constancia de Situación Fiscal (CSF)": "url_constancia_fiscal",
+                            "Caratula Bancaria Validada": "url_caratula_bancaria",
+                            "Comprobante de Domicilio Vigente": "url_comprobante_domicilio"
+                        }
+                        
+                        documentos_emp_validos = {}
+                        c_emp_docs = st.columns(2)
+                        
+                        for i, (nombre_doc, key_db) in enumerate(docs_emp.items()):
+                            url_doc = reg_emp.get(key_db)
+                            col_destino = c_emp_docs[i % 2]
+                            
+                            if url_doc and isinstance(url_doc, str) and url_doc.startswith("http"):
+                                col_destino.link_button(f"📄 Abrir {nombre_doc}", url_doc, use_container_width=True)
+                                documentos_emp_validos[nombre_doc] = url_doc
+                            else:
+                                col_destino.error(f"❌ {nombre_doc}: Archivo No Encontrado / No Cargado")
+                                
+                        if documentos_emp_validos:
+                            st.write("---")
+                            st.download_button(
+                                label="📦 Descargar Expediente Corporativo Completo (ZIP)",
+                                data=generar_zip(documentos_emp_validos),
+                                file_name=f"Expediente_Legal_{sel_empresa.replace(' ', '_')}.zip",
+                                mime="application/zip",
+                                use_container_width=True
+                            )
+            else:
+                st.info("No se encontraron empresas registradas en este grupo o criterio.")
+        except Exception as e:
+            st.error(f"Error cargando los registros corporativos de Supabase: {e}")
+
+    elif tipo_consulta == "Conductores":
         try:
             if nombre_usuario_activo == USUARIO_MAESTRO:
                 if user_sel_tab4 == "MOSTRAR TODOS":
@@ -469,7 +544,7 @@ with tab4:
         except Exception as e:
             st.error(f"Error cargando conductores: {e}")
 
-    else:
+    elif tipo_consulta == "Unidades":
         try:
             if nombre_usuario_activo == USUARIO_MAESTRO:
                 if user_sel_tab4 == "MOSTRAR TODOS":
@@ -690,7 +765,6 @@ with tab5:
 with tab6:
     st.header("Captura Dinámica de Despacho Operativo")
     
-    # Menú Maestro para filtrar qué flotilla se carga y bajo quién se guardan devoluciones sin dueño previo
     creador_id_tab6 = usuario_id_activo
     if nombre_usuario_activo == USUARIO_MAESTRO and lista_nombres_usuarios:
         user_sel_tab6 = st.selectbox("👑 Filtrar Flotilla Visible por Cuenta de Usuario:", options=["MOSTRAR TODOS"] + lista_nombres_usuarios, key="user_sel_tab6")
@@ -703,15 +777,13 @@ with tab6:
     dict_conductores = {}
     dict_unidades = {}
     dict_conductores_owner = {}
-    lista_hubs_svc = [""] # Inicializamos con opción vacía por seguridad
+    lista_hubs_svc = [""]
     
     try:
-        # --- CARGA DINÁMICA DE SITES/HUBS (TABLA SVC) ---
         hubs_db = supabase.table("hubs_svc").select("svc").order("svc", desc=False).execute().data
         if hubs_db:
             lista_hubs_svc = [""] + [h["svc"] for h in hubs_db]
 
-        # --- CARGA DE FLOTILLAS ---
         if nombre_usuario_activo == USUARIO_MAESTRO:
             if user_sel_tab6 == "MOSTRAR TODOS":
                 conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").execute().data
@@ -732,9 +804,6 @@ with tab6:
     if not dict_conductores or not dict_unidades:
         st.warning("⚠️ Atención: No se encontraron conductores o unidades disponibles para el usuario seleccionado.")
     else:
-        # =======================================================
-        # MÓDULO 1: REGISTRO DE OPERACIÓN (DESPACHO)
-        # =======================================================
         with st.form("form_operacion", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -748,7 +817,6 @@ with tab6:
                 monto_ambulancia = st.number_input("Costo Ambulancia ($)", min_value=0.0, value=0.0, step=100.0)
             
             with col2:
-                # LISTA DESPLEGABLE DINÁMICA (SVC) UBICADA ARRIBA DE PAQUETES CARGADOS
                 sel_svc = st.selectbox("Seleccione el HUB (SVC) de Servicio *", options=lista_hubs_svc)
                 paquetes = st.number_input("Cantidad de Paquetes Cargados", min_value=0, step=1, value=0)
                 paradas = st.number_input("Número de Paradas Planificadas (Ruta)", min_value=0, step=1, value=0)
@@ -794,7 +862,7 @@ with tab6:
                         "ambulancia": es_ambulancia,
                         "costal": es_costal,
                         "costo_ambulancia_variable": float(monto_ambulancia),
-                        "svc": sel_svc  # Se inserta el HUB seleccionado por el proveedor
+                        "svc": sel_svc  
                     }
                     
                     try:
@@ -803,9 +871,6 @@ with tab6:
                     except Exception as e:
                         st.error(f"Error al registrar la operación en base de datos: {e}")
 
-        # =======================================================
-        # MÓDULO 2: REGISTRO DE DEVOLUCIONES (SMX10-operaciones)
-        # =======================================================
         st.write("---")
         st.subheader("📦 Registro de Devoluciones")
         st.write("Captura de paquetes retornados asociando la operación a un conductor y unidad.")
@@ -845,6 +910,7 @@ with tab6:
                         st.success(f"✅ ¡Devolución registrada correctamente!")
                     except Exception as e:
                         st.error(f"Error al registrar la devolución en la base de datos: {e}")
+
 # ===============================================
 # PESTAÑA 7: VERIFICACION DE CAPTURA Y EDICIÓN
 # ===============================================
@@ -861,7 +927,7 @@ with tab7:
     with c_ini:
         fecha_inicio = st.date_input("Fecha de Inicio")
     with c_fin:
-        fecha_fin = st.date_input("Fecha de Término")
+        fecha_termino = st.date_input("Fecha de Término")
         
     if st.button("Buscar Capturas"):
         try:
@@ -893,7 +959,7 @@ with tab7:
                 
                 df_op["hora_llegada_hub_raw"] = pd.to_datetime(df_op["hora_llegada_hub"]).dt.tz_localize(None)
                 
-                mascara = (df_op["hora_llegada_hub_raw"].dt.date >= fecha_inicio) & (df_op["hora_llegada_hub_raw"].dt.date <= fecha_fin)
+                mascara = (df_op["hora_llegada_hub_raw"].dt.date >= fecha_inicio) & (df_op["hora_llegada_hub_raw"].dt.date <= fecha_termino)
                 df_filtrado = df_op.loc[mascara].copy()
                 
                 if not df_filtrado.empty:
@@ -925,7 +991,7 @@ with tab7:
                     
                     if "id" in df_filtrado.columns:
                         opciones_editar = df_filtrado.apply(
-                            lambda x: f"ID: {x['id']} | {x['hora_llegada_hub_str']} | {x['Conductor']} | {x['Placas']}",
+                            lambda x: f"ID: {x['id']} | {x['Hora de Arribo']} | {x['Conductor']} | {x['Placas']}",
                             axis=1
                         ).tolist()
                         
@@ -1007,7 +1073,7 @@ with tab7:
                     else:
                         st.error("Falta la columna 'id' Primary Key en la tabla de Supabase.")
                 else:
-                    st.warning(f"No se encontraron capturas entre {fecha_inicio} y {fecha_fin}.")
+                    st.warning(f"No se encontraron capturas entre {fecha_inicio} y {fecha_termino}.")
             else:
                 st.info("Aún no hay registros de operaciones.")
         except Exception as e:
