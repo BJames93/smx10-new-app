@@ -220,6 +220,7 @@ with tab2:
             celular = st.text_input("Celular")
             banco = st.text_input("Nombre Banco")
             clabe = st.text_input("Clabe Interbancaria", max_chars=18, help="La CLABE debe tener exactamente 18 dígitos numéricos.")
+            nss_num = st.text_input("Número de Seguro Social (NSS)", max_chars=11, help="El NSS consta de 11 dígitos.")
         
         st.divider() 
         st.subheader("📁 Expediente Digital")
@@ -230,6 +231,7 @@ with tab2:
             f_foto = st.file_uploader("Foto (Mercado Libre)")
             f_ine = st.file_uploader("INE (Mercado Libre)")
             f_curp = st.file_uploader("CURP (Mercado Libre)")
+            f_acta = st.file_uploader("Acta de Nacimiento")
             
         with c2:
             st.markdown("**Operación y Control**")
@@ -242,6 +244,7 @@ with tab2:
             f_fis = st.file_uploader("Constancia Fiscal")
             f_dom = st.file_uploader("Comprobante de Domicilio (Mercado Libre)")
             f_ban = st.file_uploader("Banco (Archivo)") 
+            f_nss = st.file_uploader("Documento NSS / Registro IMSS")
         
         st.divider()
         enviar = st.form_submit_button("Guardar Conductor")
@@ -265,6 +268,9 @@ with tab2:
                 u_dom = procesar_archivo(f_dom, "conductores/domicilios", rfc_up)
                 u_ban = procesar_archivo(f_ban, "conductores/bancos", rfc_up)
                 u_tox = procesar_archivo(f_tox, "conductores/toxicologicos", rfc_up)
+                u_ref = procesar_archivo(f_ref, "conductores/referencias", rfc_up)
+                u_acta = procesar_archivo(f_acta, "conductores/actas", rfc_up)
+                u_nss = procesar_archivo(f_nss, "conductores/nss", rfc_up)
                 
                 datos = {
                     "nombre_driver": nombre, 
@@ -273,6 +279,7 @@ with tab2:
                     "celular": celular,
                     "nombre_banco": banco,             
                     "clabe_interbancaria": clabe,
+                    "nss": nss_num,
                     "creado_por": creador_id_tab2,
                     "url_fotografia": u_foto,
                     "url_curp": u_curp,
@@ -281,14 +288,16 @@ with tab2:
                     "url_licencia": u_lic,
                     "url_comprobante_domicilio": u_dom,
                     "url_caratula_bancaria": u_ban,
-                    "url_toxicologico": u_tox
+                    "url_toxicologico": u_tox,
+                    "url_carta_referencia": u_ref,
+                    "url_acta_nacimiento": u_acta,
+                    "url_nss": u_nss
                 }
                 try:
                     supabase.table("alta_conductor").insert(datos).execute()
                     st.success("Conductor registrado exitosamente")
                 except Exception as e:
                     st.error(f"Error al guardar: {e}")
-
 # ==========================================
 # PESTAÑA 3: CONTROL DE UNIDADES
 # ==========================================
