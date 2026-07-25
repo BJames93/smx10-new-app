@@ -231,7 +231,7 @@ with tab2:
             f_foto = st.file_uploader("Foto (Mercado Libre)")
             f_ine = st.file_uploader("INE (Mercado Libre)")
             f_curp = st.file_uploader("CURP (Mercado Libre)")
-            f_acta = st.file_uploader("Acta de Nacimiento")
+            f_acta = st.file_uploader("Acta de Nacimiento (Mercado Libre)")
             
         with c2:
             st.markdown("**Operación y Control**")
@@ -241,10 +241,10 @@ with tab2:
             
         with c3:
             st.markdown("**Fiscal y Bancario**")
-            f_fis = st.file_uploader("Constancia Fiscal")
+            f_fis = st.file_uploader("Constancia Fiscal (Mercado Libre)" )
             f_dom = st.file_uploader("Comprobante de Domicilio (Mercado Libre)")
-            f_ban = st.file_uploader("Banco (Archivo)") 
-            f_nss = st.file_uploader("Documento NSS / Registro IMSS")
+            f_ban = st.file_uploader("Banco (Archivo en PDF / Mercado Libre)") 
+            f_nss = st.file_uploader("Documento NSS / Registro IMSS (Mercado Libre)")
         
         st.divider()
         enviar = st.form_submit_button("Guardar Conductor")
