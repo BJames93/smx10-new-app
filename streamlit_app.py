@@ -15,7 +15,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 BUCKET_NAME = "documentos_operacion_smx10"
 
 # --- CONFIGURACIÓN DE USUARIOS ADMINISTRADORES ---
-USUARIOS_MAESTROS = ["boulder_admin", "ADMIN_MASTER_02"]
+USUARIOS_MAESTROS = ["boulder_admin", "boulder_admin_02"]
 
 # --- LÓGICA DE LOGIN CON SUPABASE ---
 def check_password():
