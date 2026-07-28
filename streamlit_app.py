@@ -272,6 +272,7 @@ with tab2:
                 u_acta = procesar_archivo(f_acta, "conductores/actas", rfc_up)
                 u_nss = procesar_archivo(f_nss, "conductores/nss", rfc_up)
                 
+                # CORRECCIÓN APLICADA AQUÍ: Se eliminó la clave "nss" no existente en la BD
                 datos = {
                     "nombre_driver": nombre, 
                     "rfc": rfc_up, 
@@ -279,7 +280,6 @@ with tab2:
                     "celular": celular,
                     "nombre_banco": banco,             
                     "clabe_interbancaria": clabe,
-                    "nss": nss_num,
                     "creado_por": creador_id_tab2,
                     "url_fotografia": u_foto,
                     "url_curp": u_curp,
@@ -298,6 +298,7 @@ with tab2:
                     st.success("Conductor registrado exitosamente")
                 except Exception as e:
                     st.error(f"Error al guardar: {e}")
+
 # ==========================================
 # PESTAÑA 3: CONTROL DE UNIDADES
 # ==========================================
@@ -519,23 +520,27 @@ with tab4:
                         with c2:
                             st.write("### Documentación Digital")
                             
-                            docs = {}
-                            docs["CURP"] = "url_curp"
-                            docs["INE"] = "url_ine"
-                            docs["Constancia Fiscal"] = "url_constancia_fiscal"
-                            docs["Licencia de Conducir"] = "url_licencia"
-                            docs["Comprobante Domicilio"] = "url_comprobante_domicilio"
-                            docs["Caratula Bancaria"] = "url_caratula_bancaria"
-                            docs["Examen Toxicologico"] = "url_toxicologico"
+                            docs = {
+                                "CURP": "url_curp",
+                                "INE": "url_ine",
+                                "Constancia Fiscal": "url_constancia_fiscal",
+                                "Licencia de Conducir": "url_licencia",
+                                "Comprobante Domicilio": "url_comprobante_domicilio",
+                                "Caratula Bancaria": "url_caratula_bancaria",
+                                "Examen Toxicologico": "url_toxicologico",
+                                "Carta de Referencia": "url_carta_referencia",
+                                "Acta de Nacimiento": "url_acta_nacimiento",
+                                "Documento NSS": "url_nss"
+                            }
                             
                             documentos_validos = {}
-                            for nombre, key in docs.items():
+                            for nombre_doc_item, key in docs.items():
                                 url = reg.get(key)
                                 if url and isinstance(url, str) and url.startswith("http"):
-                                    st.link_button(f"📄 Ver {nombre}", url)
-                                    documentos_validos[nombre] = url
+                                    st.link_button(f"📄 Ver {nombre_doc_item}", url)
+                                    documentos_validos[nombre_doc_item] = url
                                 else:
-                                    st.caption(f"❌ {nombre}: No cargado")
+                                    st.caption(f"❌ {nombre_doc_item}: No cargado")
                             
                             if documentos_validos:
                                 st.write("---")
@@ -581,7 +586,6 @@ with tab4:
                             "Tarjeta de Circulación": "url_tarjeta_circulacion",
                             "Póliza de Seguro": "url_poliza_seguro",
                             "Fotografía VIN": "url_vin",
-                            "Fotografía Placas (Anterior)": "url_placa", 
                             "Foto Frontal": "url_foto_frontal",
                             "Foto Trasera": "url_foto_trasera",
                             "Foto Lateral Izquierda": "url_foto_izquierda",
@@ -589,13 +593,13 @@ with tab4:
                         }
                         
                         documentos_u_validos = {}
-                        for nombre, key in docs_u.items():
+                        for nombre_u, key in docs_u.items():
                             url = reg.get(key)
                             if url and isinstance(url, str) and url.startswith("http"):
-                                st.link_button(f"📄 Ver {nombre}", url)
-                                documentos_u_validos[nombre] = url
+                                st.link_button(f"📄 Ver {nombre_u}", url)
+                                documentos_u_validos[nombre_u] = url
                             else:
-                                st.caption(f"❌ {nombre}: No cargado")
+                                st.caption(f"❌ {nombre_u}: No cargado")
                                 
                         if documentos_u_validos:
                             st.write("---")
@@ -655,13 +659,16 @@ with tab5:
                     "Licencia de Conducir": "url_licencia",
                     "Comprobante Domicilio": "url_comprobante_domicilio",
                     "Caratula Bancaria": "url_caratula_bancaria",
-                    "Examen Toxicologico": "url_toxicologico"
+                    "Examen Toxicologico": "url_toxicologico",
+                    "Carta de Referencia": "url_carta_referencia",
+                    "Acta de Nacimiento": "url_acta_nacimiento",
+                    "Documento NSS": "url_nss"
                 }
                 
                 cols = st.columns(3)
-                for i, (nombre, key) in enumerate(docs_map.items()):
+                for i, (nombre_map, key) in enumerate(docs_map.items()):
                     status = "✅" if reg.get(key) else "❌"
-                    cols[i % 3].write(f"{status} {nombre}")
+                    cols[i % 3].write(f"{status} {nombre_map}")
                 st.write("---")
                 
                 opcion = st.selectbox("¿Qué deseas actualizar?", [""] + list(docs_map.keys()) + ["Actualizar Correo Electrónico", "Actualizar Número de Celular", "Actualizar Datos Bancarios"], key="opcion_cond")
@@ -741,10 +748,10 @@ with tab5:
                 }
                 
                 cols_u = st.columns(3)
-                for i, (nombre, info) in enumerate(docs_map_u.items()):
+                for i, (nombre_u_map, info) in enumerate(docs_map_u.items()):
                     key_db = info[0]
                     status = "✅" if reg_u.get(key_db) else "❌"
-                    cols_u[i % 3].write(f"{status} {nombre}")
+                    cols_u[i % 3].write(f"{status} {nombre_u_map}")
                 st.write("---")
                 
                 opcion_u = st.selectbox("¿Qué documento o fotografía deseas actualizar?", [""] + list(docs_map_u.keys()), key="opcion_unid")
