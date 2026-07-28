@@ -652,7 +652,9 @@ with tab5:
                 st.write("---")
                 st.write("Estado de documentos actuales:")
                 
+                # Se agrega "Fotografía de Perfil" asignada a "url_fotografia"
                 docs_map = {
+                    "Fotografía de Perfil": "url_fotografia",
                     "CURP": "url_curp",
                     "INE": "url_ine",
                     "Constancia Fiscal": "url_constancia_fiscal",
@@ -702,18 +704,23 @@ with tab5:
                             st.success("¡Datos bancarios actualizados correctamente!")
                 
                 elif opcion in docs_map:
-                    archivo_nuevo = st.file_uploader(f"Cargar nuevo archivo de {opcion}")
+                    archivo_nuevo = st.file_uploader(f"Cargar nuevo archivo o imagen de {opcion}")
                     if st.button("Guardar actualización"):
                         if archivo_nuevo:
                             columna_db = docs_map[opcion]
-                            nombre_carpeta = opcion.lower().replace(" ", "_")
-                            ruta_storage = f"conductores/{nombre_carpeta}s"
+                            
+                            # Manejo específico de carpeta para la fotografía de perfil
+                            if opcion == "Fotografía de Perfil":
+                                ruta_storage = "conductores/fotos"
+                            else:
+                                nombre_carpeta = opcion.lower().replace(" ", "_")
+                                ruta_storage = f"conductores/{nombre_carpeta}s"
                             
                             nueva_url = procesar_archivo(archivo_nuevo, ruta_storage, rfc_busqueda.upper())
                             supabase.table("alta_conductor").update({columna_db: nueva_url}).eq("rfc", rfc_busqueda.upper()).execute()
-                            st.success(f"¡{opcion} actualizado correctamente!")
+                            st.success(f"¡{opcion} actualizada correctamente!")
                         else:
-                            st.warning("Por favor selecciona un archivo.")
+                            st.warning("Por favor selecciona un archivo o fotografía.")
             else:
                 st.error("No se encontró ningún conductor bajo los parámetros o cuenta establecida.")
 
