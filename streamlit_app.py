@@ -24,11 +24,19 @@ def check_password():
         input_pass = st.session_state["password"].strip()
         
         try:
+            # Solo permite iniciar sesión a usuarios que estén "Activo"
             res = supabase.table("usuarios_acceso").select("*").eq("nombre_usuario", input_user).eq("contrasena", input_pass).execute()
             
             if len(res.data) > 0:
+                usuario = res.data[0]
+                status_usuario = str(usuario.get("status", "Activo")).strip().capitalize()
+                if status_usuario == "Inactivo":
+                    st.session_state["password_correct"] = False
+                    st.error("❌ Tu usuario se encuentra Inactivo. Contacta al administrador.")
+                    return
+                
                 st.session_state["password_correct"] = True
-                st.session_state["usuario_actual"] = res.data[0] 
+                st.session_state["usuario_actual"] = usuario 
                 del st.session_state["password"]  
             else:
                 st.session_state["password_correct"] = False
@@ -79,18 +87,23 @@ def procesar_archivo(archivo, carpeta, identificador):
 usuario_id_activo = st.session_state["usuario_actual"]["user_id"]
 nombre_usuario_activo = st.session_state["usuario_actual"]["nombre_usuario"]
 
-# --- PRECARGA BASE DE USUARIOS (PARA ADMINISTRADORES) ---
+# --- FILTRADO CENTRALIZADO DE USUARIOS ACTIVOS ---
 mapa_usuarios_master = {}
 lista_nombres_usuarios = []
+usuarios_activos_ids = []
 
-if nombre_usuario_activo in USUARIOS_MAESTROS:
-    try:
-        usuarios_db = supabase.table("usuarios_acceso").select("user_id, nombre_usuario").execute().data
-        if usuarios_db:
-            mapa_usuarios_master = {u["nombre_usuario"]: u["user_id"] for u in usuarios_db}
-            lista_nombres_usuarios = list(mapa_usuarios_master.keys())
-    except Exception as e:
-        st.error(f"Error crítico al inicializar lista de usuarios maestros: {e}")
+try:
+    # Se obtienen únicamente los usuarios cuyo STATUS sea Activo
+    res_usuarios_activos = supabase.table("usuarios_acceso").select("user_id, nombre_usuario, status").execute().data
+    if res_usuarios_activos:
+        for u in res_usuarios_activos:
+            st_val = str(u.get("status", "Activo")).strip().capitalize()
+            if st_val != "Inactivo":
+                mapa_usuarios_master[u["nombre_usuario"]] = u["user_id"]
+                usuarios_activos_ids.append(u["user_id"])
+        lista_nombres_usuarios = list(mapa_usuarios_master.keys())
+except Exception as e:
+    st.error(f"Error crítico al inicializar la lista de usuarios activos: {e}")
 
 # --- INTERFAZ PRINCIPAL ---
 st.set_page_config(page_title="Plataforma BoulderBrwn", page_icon="🚀", layout="wide")
@@ -272,7 +285,6 @@ with tab2:
                 u_acta = procesar_archivo(f_acta, "conductores/actas", rfc_up)
                 u_nss = procesar_archivo(f_nss, "conductores/nss", rfc_up)
                 
-                # CORRECCIÓN APLICADA AQUÍ: Se eliminó la clave "nss" no existente en la BD
                 datos = {
                     "nombre_driver": nombre, 
                     "rfc": rfc_up, 
@@ -417,7 +429,7 @@ with tab4:
     if tipo_consulta == "Empresas":
         try:
             if user_sel_tab4 == "MOSTRAR TODOS":
-                res_emp = supabase.table("registro_empresa").select("*").execute()
+                res_emp = supabase.table("registro_empresa").select("*").in_("creado_por", usuarios_activos_ids).execute()
             else:
                 res_emp = supabase.table("registro_empresa").select("*").eq("creado_por", mapa_usuarios_master[user_sel_tab4]).execute()
                 
@@ -488,7 +500,7 @@ with tab4:
         try:
             if nombre_usuario_activo in USUARIOS_MAESTROS:
                 if user_sel_tab4 == "MOSTRAR TODOS":
-                    res = supabase.table("alta_conductor").select("*").execute()
+                    res = supabase.table("alta_conductor").select("*").in_("creado_por", usuarios_activos_ids).execute()
                 else:
                     res = supabase.table("alta_conductor").select("*").eq("creado_por", mapa_usuarios_master[user_sel_tab4]).execute()
             else:
@@ -559,7 +571,7 @@ with tab4:
         try:
             if nombre_usuario_activo in USUARIOS_MAESTROS:
                 if user_sel_tab4 == "MOSTRAR TODOS":
-                    res = supabase.table("unidades").select("*").execute()
+                    res = supabase.table("unidades").select("*").in_("creado_por", usuarios_activos_ids).execute()
                 else:
                     res = supabase.table("unidades").select("*").eq("creado_por", mapa_usuarios_master[user_sel_tab4]).execute()
             else:
@@ -634,7 +646,7 @@ with tab5:
         if rfc_busqueda:
             if nombre_usuario_activo in USUARIOS_MAESTROS:
                 if user_sel_tab5 == "MOSTRAR TODOS":
-                    res = supabase.table("alta_conductor").select("*").eq("rfc", rfc_busqueda.upper()).execute()
+                    res = supabase.table("alta_conductor").select("*").eq("rfc", rfc_busqueda.upper()).in_("creado_por", usuarios_activos_ids).execute()
                 else:
                     res = supabase.table("alta_conductor").select("*").eq("rfc", rfc_busqueda.upper()).eq("creado_por", mapa_usuarios_master[user_sel_tab5]).execute()
             else:
@@ -652,7 +664,6 @@ with tab5:
                 st.write("---")
                 st.write("Estado de documentos actuales:")
                 
-                # Se agrega "Fotografía de Perfil" asignada a "url_fotografia"
                 docs_map = {
                     "Fotografía de Perfil": "url_fotografia",
                     "CURP": "url_curp",
@@ -709,7 +720,6 @@ with tab5:
                         if archivo_nuevo:
                             columna_db = docs_map[opcion]
                             
-                            # Manejo específico de carpeta para la fotografía de perfil
                             if opcion == "Fotografía de Perfil":
                                 ruta_storage = "conductores/fotos"
                             else:
@@ -730,7 +740,7 @@ with tab5:
         if placas_busqueda:
             if nombre_usuario_activo in USUARIOS_MAESTROS:
                 if user_sel_tab5 == "MOSTRAR TODOS":
-                    res_u = supabase.table("unidades").select("*").eq("placas", placas_busqueda.upper()).execute()
+                    res_u = supabase.table("unidades").select("*").eq("placas", placas_busqueda.upper()).in_("creado_por", usuarios_activos_ids).execute()
                 else:
                     res_u = supabase.table("unidades").select("*").eq("placas", placas_busqueda.upper()).eq("creado_por", mapa_usuarios_master[user_sel_tab5]).execute()
             else:
@@ -806,14 +816,14 @@ with tab6:
 
         if nombre_usuario_activo in USUARIOS_MAESTROS:
             if user_sel_tab6 == "MOSTRAR TODOS":
-                conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").execute().data
-                unidades_db = supabase.table("unidades").select("id_unidad, placas").execute().data
+                conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").in_("creado_por", usuarios_activos_ids).execute().data
+                unidades_db = supabase.table("unidades").select("id_unidad, placas, creado_por").in_("creado_por", usuarios_activos_ids).execute().data
             else:
                 conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").eq("creado_por", creador_id_tab6).execute().data
-                unidades_db = supabase.table("unidades").select("id_unidad, placas").eq("creado_por", creador_id_tab6).execute().data
+                unidades_db = supabase.table("unidades").select("id_unidad, placas, creado_por").eq("creado_por", creador_id_tab6).execute().data
         else:
             conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").eq("creado_por", usuario_id_activo).execute().data
-            unidades_db = supabase.table("unidades").select("id_unidad, placas").eq("creado_por", usuario_id_activo).execute().data
+            unidades_db = supabase.table("unidades").select("id_unidad, placas, creado_por").eq("creado_por", usuario_id_activo).execute().data
         
         dict_conductores = {c["nombre_driver"]: c["id_conductor"] for c in conductores_db}
         dict_unidades = {u["placas"]: u["id_unidad"] for u in unidades_db}
@@ -953,9 +963,9 @@ with tab7:
         try:
             if nombre_usuario_activo in USUARIOS_MAESTROS:
                 if user_sel_tab7 == "MOSTRAR TODOS":
-                    res_op = supabase.table("registro_operacion").select("*").execute()
-                    cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").execute().data
-                    unid_db = supabase.table("unidades").select("id_unidad, placas, tipo_unidad").execute().data
+                    res_op = supabase.table("registro_operacion").select("*").in_("creado_por", usuarios_activos_ids).execute()
+                    cond_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver").in_("creado_por", usuarios_activos_ids).execute().data
+                    unid_db = supabase.table("unidades").select("id_unidad, placas, tipo_unidad").in_("creado_por", usuarios_activos_ids).execute().data
                 else:
                     target_uid = mapa_usuarios_master[user_sel_tab7]
                     res_op = supabase.table("registro_operacion").select("*").eq("creado_por", target_uid).execute()
