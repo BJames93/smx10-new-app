@@ -6,7 +6,12 @@ import unicodedata
 import io
 import zipfile
 import requests
-from fpdf import FPDF
+
+# Importación segura de FPDF para evitar fallos críticos en servidor
+try:
+    from fpdf import FPDF
+except ModuleNotFoundError:
+    FPDF = None
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 SUPABASE_URL = "https://sinepuhjujazcaelrqms.supabase.co"
