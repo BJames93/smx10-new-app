@@ -750,7 +750,21 @@ with tab5:
 # ==========================================
 with tab6:
     st.header("📋 Captura Dinámica de Despacho Operativo")
-    dict_conductores, dict_unidades, dict_conductores_owner = {}, {}, {}
+    
+    creador_id_tab6 = usuario_id_activo
+    if nombre_usuario_activo in USUARIOS_MAESTROS and lista_nombres_usuarios:
+        user_sel_tab6 = st.selectbox(
+            "👑 Filtrar Flotilla Visible por Cuenta de Usuario / Proveedor:", 
+            options=["MOSTRAR TODOS"] + lista_nombres_usuarios, 
+            key="user_sel_tab6"
+        )
+        if user_sel_tab6 != "MOSTRAR TODOS":
+            creador_id_tab6 = mapa_usuarios_master[user_sel_tab6]
+        st.write("---")
+
+    dict_conductores = {}
+    dict_unidades = {}
+    dict_conductores_owner = {}
     lista_hubs_svc = [""]
     
     try:
@@ -758,62 +772,127 @@ with tab6:
         if hubs_db:
             lista_hubs_svc = [""] + [h["svc"] for h in hubs_db]
 
-        conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").execute().data
-        unidades_db = supabase.table("unidades").select("id_unidad, placas, creado_por").execute().data
+        if nombre_usuario_activo in USUARIOS_MAESTROS:
+            if user_sel_tab6 == "MOSTRAR TODOS":
+                conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").in_("creado_por", usuarios_activos_ids).execute().data
+                unidades_db = supabase.table("unidades").select("id_unidad, placas, creado_por").in_("creado_por", usuarios_activos_ids).execute().data
+            else:
+                conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").eq("creado_por", creador_id_tab6).execute().data
+                unidades_db = supabase.table("unidades").select("id_unidad, placas, creado_por").eq("creado_por", creador_id_tab6).execute().data
+        else:
+            conductores_db = supabase.table("alta_conductor").select("id_conductor, nombre_driver, creado_por").eq("creado_por", usuario_id_activo).execute().data
+            unidades_db = supabase.table("unidades").select("id_unidad, placas, creado_por").eq("creado_por", usuario_id_activo).execute().data
         
         dict_conductores = {c["nombre_driver"]: c["id_conductor"] for c in conductores_db}
         dict_unidades = {u["placas"]: u["id_unidad"] for u in unidades_db}
         dict_conductores_owner = {c["id_conductor"]: c.get("creado_por") for c in conductores_db}
     except Exception as e:
-        st.error(f"Error al sincronizar catálogos: {e}")
+        st.error(f"Error de sincronización con Supabase: {e}")
 
-    with st.form("form_operacion", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            tipo_cliente = st.selectbox("Tipo de Cliente *", options=["", "Mercado Libre", "Amazon"])
-            sel_conductor = st.selectbox("Seleccione Conductor *", options=[""] + list(dict_conductores.keys()))
-            sel_unidad = st.selectbox("Seleccione Vehículo *", options=[""] + list(dict_unidades.keys()))
-            status_operacion = st.selectbox("Estatus del Servicio", options=["En ruta", "Cancelacion", "No show"])
-            es_ambulancia = st.checkbox("¿Realizó Ambulancia?")
-            es_costal = st.checkbox("¿Es Costal?")
-            monto_ambulancia = st.number_input("Costo Ambulancia ($)", min_value=0.0, value=0.0, step=100.0)
-        
-        with col2:
-            sel_svc = st.selectbox("HUB (SVC) *", options=lista_hubs_svc)
-            paquetes = st.number_input("Paquetes Cargados", min_value=0, step=1, value=0)
-            paradas = st.number_input("Paradas Planificadas", min_value=0, step=1, value=0)
-            fecha_llegada = st.date_input("Fecha Llegada")
-            hora_llegada = st.time_input("Hora Entrada")
-            fecha_salida = st.date_input("Fecha Salida")
-            hora_salida = st.time_input("Hora Despacho")
+    if not dict_conductores or not dict_unidades:
+        st.warning("⚠️ Atención: No se encontraron conductores o unidades disponibles para el usuario o proveedor seleccionado.")
+    else:
+        with st.form("form_operacion", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                tipo_cliente = st.selectbox("Tipo de Cliente *", options=["", "Mercado Libre", "Amazon"])
+                sel_conductor = st.selectbox("Seleccione el Conductor asignado *", options=[""] + list(dict_conductores.keys()))
+                sel_unidad = st.selectbox("Seleccione las Placas del Vehículo *", options=[""] + list(dict_unidades.keys()))
+                status_operacion = st.selectbox("Estatus del Servicio", options=["En ruta", "Cancelacion", "No show"])
+                es_ambulancia = st.checkbox("¿Realizó Ambulancia?")
+                es_costal = st.checkbox("¿Es Costal?")
+                monto_ambulancia = st.number_input("Costo Ambulancia ($)", min_value=0.0, value=0.0, step=100.0)
             
-        enviar_operacion = st.form_submit_button("Cerrar y Despachar Operación")
-        if enviar_operacion and tipo_cliente and sel_conductor and sel_unidad and sel_svc:
-            iso_llegada = datetime.combine(fecha_llegada, hora_llegada).isoformat()
-            iso_salida = datetime.combine(fecha_salida, hora_salida).isoformat()
-            cond_id = dict_conductores[sel_conductor]
+            with col2:
+                sel_svc = st.selectbox("Seleccione el HUB (SVC) de Servicio *", options=lista_hubs_svc)
+                paquetes = st.number_input("Cantidad de Paquetes Cargados", min_value=0, step=1, value=0)
+                paradas = st.number_input("Número de Paradas Planificadas (Ruta)", min_value=0, step=1, value=0)
+                fecha_llegada = st.date_input("Fecha de Llegada al Hub")
+                hora_llegada = st.time_input("Hora de Entrada (Hub)")
+                fecha_salida = st.date_input("Fecha de Salida del Hub")
+                hora_salida = st.time_input("Hora de Despacho (Hub)")
             
-            datos_op = {
-                "creado_por": dict_conductores_owner.get(cond_id, usuario_id_activo), 
-                "tipo_cliente": tipo_cliente,
-                "conductor_id": cond_id,
-                "unidad_id": dict_unidades[sel_unidad],
-                "status_operacion": status_operacion,
-                "hora_llegada_hub": iso_llegada,
-                "hora_salida_hub": iso_salida,
-                "paquetes_cargados": int(paquetes),
-                "paradas": int(paradas),
-                "ambulancia": es_ambulancia,
-                "costal": es_costal,
-                "costo_ambulancia_variable": float(monto_ambulancia),
-                "svc": sel_svc  
-            }
-            try:
-                supabase.table("registro_operacion").insert(datos_op).execute()
-                st.success("¡Operación registrada con éxito!")
-            except Exception as e:
-                st.error(f"Error al registrar operación: {e}")
+            c_btn1, c_btn2 = st.columns([1, 4])
+            with c_btn1:
+                limpiar = st.form_submit_button("Limpiar")
+            with c_btn2:
+                enviar_operacion = st.form_submit_button("Cerrar y Despachar Operación")
+            
+            if limpiar:
+                st.info("🧹 Formulario reiniciado.")
+            
+            if enviar_operacion:
+                if not tipo_cliente or not sel_conductor or not sel_unidad or not sel_svc:
+                    st.error("Por favor completa los campos obligatorios: Cliente, Conductor, Vehículo y HUB (SVC).")
+                else:
+                    iso_llegada = datetime.combine(fecha_llegada, hora_llegada).isoformat()
+                    iso_salida = datetime.combine(fecha_salida, hora_salida).isoformat()
+                    
+                    cond_id_seleccionado = dict_conductores[sel_conductor]
+                    owner_operacion = dict_conductores_owner.get(cond_id_seleccionado, creador_id_tab6)
+                    
+                    datos_operacion = {
+                        "creado_por": owner_operacion, 
+                        "tipo_cliente": tipo_cliente,
+                        "conductor_id": cond_id_seleccionado,
+                        "unidad_id": dict_unidades[sel_unidad],
+                        "status_operacion": status_operacion,
+                        "hora_llegada_hub": iso_llegada,
+                        "hora_salida_hub": iso_salida,
+                        "paquetes_cargados": int(paquetes),
+                        "paradas": int(paradas),
+                        "ambulancia": es_ambulancia,
+                        "costal": es_costal,
+                        "costo_ambulancia_variable": float(monto_ambulancia),
+                        "svc": sel_svc  
+                    }
+                    
+                    try:
+                        supabase.table("registro_operacion").insert(datos_operacion).execute()
+                        st.success(f"¡Viaje despachado correctamente en {sel_svc}!")
+                    except Exception as e:
+                        st.error(f"Error al registrar la operación en la base de datos: {e}")
 
+        # --- SECCIÓN DE DEVOLUCIONES ---
+        st.write("---")
+        st.subheader("📦 Registro de Devoluciones")
+        st.write("Captura de paquetes retornados asociando la operación a un conductor y unidad.")
+
+        with st.form("form_devoluciones", clear_on_submit=True):
+            col_dev1, col_dev2 = st.columns(2)
+            
+            with col_dev1:
+                dev_cliente = st.selectbox("Tipo de Cliente (Devolución) *", options=["", "Mercado Libre", "Amazon"])
+                dev_conductor = st.selectbox("Conductor asignado *", options=[""] + list(dict_conductores.keys()), key="dev_cond")
+                dev_unidad = st.selectbox("Placas del Vehículo *", options=[""] + list(dict_unidades.keys()), key="dev_unid")
+            
+            with col_dev2:
+                dev_fecha = st.date_input("Fecha de Devolución *")
+                dev_paquetes = st.number_input("Cantidad de Paquetes Devueltos *", min_value=1, step=1, value=1)
+            
+            enviar_devolucion = st.form_submit_button("Registrar Devolución")
+            
+            if enviar_devolucion:
+                if not dev_cliente or not dev_conductor or not dev_unidad:
+                    st.error("⚠️ Por favor selecciona el Cliente, Conductor y Placas para registrar la devolución.")
+                else:
+                    cond_id_dev = dict_conductores[dev_conductor]
+                    owner_devolucion = dict_conductores_owner.get(cond_id_dev, creador_id_tab6)
+                    
+                    datos_devolucion = {
+                        "user_id": owner_devolucion, 
+                        "fecha_devolucion": dev_fecha.isoformat(),
+                        "tipo_cliente": dev_cliente,
+                        "conductor_id": cond_id_dev,
+                        "unidad_id": dict_unidades[dev_unidad],
+                        "paquetes_devueltos": int(dev_paquetes)
+                    }
+                    
+                    try:
+                        supabase.table("devoluciones").insert(datos_devolucion).execute()
+                        st.success("✅ ¡Devolución registrada correctamente!")
+                    except Exception as e:
+                        st.error(f"Error al registrar la devolución en la base de datos: {e}")
 # ===============================================
 # PESTAÑA 7: VERIFICACIÓN DE CAPTURA
 # ===============================================
