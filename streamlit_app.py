@@ -1067,6 +1067,7 @@ with tab7:
         except Exception as e:
             st.error(f"Error al generar la consulta: {e}")
 
+
 # ===============================================
 # NUEVA PESTAÑA: REPORTE DE CONCILIACIÓN (SECRETA Y EXCLUSIVA ADMIN FINANZAS)
 # ===============================================
@@ -1085,6 +1086,7 @@ if es_admin_finanzas and tab_reporte:
         es_proveedor_tercero = "Proveedor Tercero" in opcion_empresa
         
         proveedor_seleccionado = None
+        usuario_tarifa_buscar = "boulder_admin"
         aplica_retencion = False
         datos_fiscales_msg = "Operación Directa BoulderBrwn (Sin Retención)"
 
@@ -1093,6 +1095,7 @@ if es_admin_finanzas and tab_reporte:
             if proveedores_disponibles:
                 proveedor_seleccionado = st.selectbox("Seleccione el Proveedor a Conciliar:", proveedores_disponibles)
                 nombre_empresa_corte = f"Proveedor: {proveedor_seleccionado}"
+                usuario_tarifa_buscar = proveedor_seleccionado
                 
                 # --- BÚSQUEDA DE DATOS FISCALES EN REGISTRO_EMPRESA ---
                 uid_prov = mapa_usuarios_master.get(proveedor_seleccionado)
@@ -1122,6 +1125,7 @@ if es_admin_finanzas and tab_reporte:
                 nombre_empresa_corte = "Proveedor Tercero"
         else:
             nombre_empresa_corte = "BoulderBrwn (Persona Moral)"
+            usuario_tarifa_buscar = "boulder_admin"
 
         st.divider()
 
@@ -1136,7 +1140,7 @@ if es_admin_finanzas and tab_reporte:
             
         if st.button("🚀 Generar Conciliación Financiera"):
             try:
-                # Consulta directa a las operaciones y cruce dinámico con la tabla de tarifas
+                # Consulta directa a operaciones y a la tabla de tarifas
                 res_operaciones = supabase.table("registro_operacion").select("*").execute()
                 res_tarifas = supabase.table("tarifas").select("*").execute()
                 
@@ -1154,7 +1158,7 @@ if es_admin_finanzas and tab_reporte:
                     df_periodo = df_rep.loc[mascara_fechas].copy()
                     
                     if not df_periodo.empty:
-                        # Mapear nombres de conductores y vehículos
+                        # Mapear nombres de conductores y vehículos (incluyendo tipo_unidad)
                         res_cond = supabase.table("alta_conductor").select("id_conductor, nombre_driver, nombre_banco, clabe_interbancaria").execute().data
                         res_unid = supabase.table("unidades").select("id_unidad, placas, marca, tipo_unidad").execute().data
                         
@@ -1179,9 +1183,34 @@ if es_admin_finanzas and tab_reporte:
                         df_periodo["Paradas"] = df_periodo["paradas"]
                         df_periodo["Es_Ambulancia"] = df_periodo["ambulancia"]
                         df_periodo["Es_Costal"] = df_periodo["costal"]
-                        
-                        # Asignación de tarifas y cálculo de impuestos condicionado a aplica_retencion
-                        df_periodo["Monto_por_Unidad"] = df_periodo.apply(lambda r: float(r.get("costo_ambulancia_variable", 0)) if r.get("ambulancia") else 1500.0, axis=1)
+
+                        # --- FUNCIÓN DE BÚSQUEDA DINÁMICA DE TARIFA ---
+                        def obtener_monto_tarifa(row):
+                            # Si fue ambulancia, se cobra el monto variable registrado en la operación
+                            if row.get("Es_Ambulancia") == True:
+                                return float(row.get("costo_ambulancia_variable", 0.0))
+                            
+                            cliente_row = str(row.get("Cliente", "")).strip()
+                            tipo_unidad_row = str(row.get("Tipo", "")).strip()
+                            
+                            if not df_tar.empty:
+                                # Filtro en la tabla tarifas por usuario, cliente y tipo de unidad
+                                tarifa_match = df_tar[
+                                    (df_tar["nombre_usuario"].astype(str).str.strip() == usuario_tarifa_buscar) &
+                                    (df_tar["tipo_cliente"].astype(str).str.strip() == cliente_row) &
+                                    (df_tar["tipo_unidad"].astype(str).str.strip() == tipo_unidad_row)
+                                ]
+                                
+                                if not tarifa_match.empty:
+                                    monto_val = tarifa_match.iloc[0].get("monto")
+                                    if pd.notnull(monto_val):
+                                        return float(monto_val)
+                            
+                            # Si no encuentra coincidencia en la tabla de tarifas, asigna un valor por defecto
+                            return 1500.0
+
+                        # Aplicación de cálculo de tarifas y montos netos
+                        df_periodo["Monto_por_Unidad"] = df_periodo.apply(obtener_monto_tarifa, axis=1)
                         df_periodo["Monto_Final_Unidad"] = df_periodo["Monto_por_Unidad"]
                         df_periodo["Costo_IMSS"] = 0.0
                         df_periodo["Subtotal"] = df_periodo["Monto_Final_Unidad"]
