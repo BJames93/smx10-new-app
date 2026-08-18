@@ -1067,7 +1067,6 @@ with tab7:
         except Exception as e:
             st.error(f"Error al generar la consulta: {e}")
 
-
 # ===============================================
 # NUEVA PESTAÑA: REPORTE DE CONCILIACIÓN (SECRETA Y EXCLUSIVA ADMIN FINANZAS)
 # ===============================================
@@ -1158,9 +1157,10 @@ if es_admin_finanzas and tab_reporte:
                     df_periodo = df_rep.loc[mascara_fechas].copy()
                     
                     if not df_periodo.empty:
-                        # Mapear nombres de conductores y vehículos (incluyendo tipo_unidad)
+                        # Mapear nombres de conductores, vehículos y empresas
                         res_cond = supabase.table("alta_conductor").select("id_conductor, nombre_driver, nombre_banco, clabe_interbancaria").execute().data
                         res_unid = supabase.table("unidades").select("id_unidad, placas, marca, tipo_unidad").execute().data
+                        res_empresas = supabase.table("registro_empresa").select("creado_por, nombre_empresa").execute().data
                         
                         map_cond = {c["id_conductor"]: c["nombre_driver"] for c in res_cond}
                         map_banco = {c["id_conductor"]: c.get("nombre_banco", "") for c in res_cond}
@@ -1169,6 +1169,16 @@ if es_admin_finanzas and tab_reporte:
                         map_marca = {u["id_unidad"]: u.get("marca", "") for u in res_unid}
                         map_tipo = {u["id_unidad"]: u.get("tipo_unidad", "") for u in res_unid}
                         
+                        # Mapeo de creado_por a Nombre de Empresa (fallback a nombre de usuario si no hay empresa)
+                        map_empresa_nombre = {e["creado_por"]: e["nombre_empresa"] for e in res_empresas if e.get("creado_por")}
+                        map_usuario_inverso = {v: k for k, v in mapa_usuarios_master.items()}
+                        
+                        def resolver_nombre_empresa(creado_por_id):
+                            if creado_por_id in map_empresa_nombre:
+                                return map_empresa_nombre[creado_por_id]
+                            return map_usuario_inverso.get(creado_por_id, str(creado_por_id))
+
+                        df_periodo["Empresa_Proveedor"] = df_periodo["creado_por"].apply(resolver_nombre_empresa)
                         df_periodo["Conductor"] = df_periodo["conductor_id"].map(map_cond)
                         df_periodo["Banco"] = df_periodo["conductor_id"].map(map_banco)
                         df_periodo["Cuenta_clabe"] = df_periodo["conductor_id"].map(map_clabe)
@@ -1184,9 +1194,8 @@ if es_admin_finanzas and tab_reporte:
                         df_periodo["Es_Ambulancia"] = df_periodo["ambulancia"]
                         df_periodo["Es_Costal"] = df_periodo["costal"]
 
-                        # --- FUNCIÓN DE BÚSQUEDA DINÁMICA DE TARIFA ---
+                        # --- BÚSQUEDA DINÁMICA DE TARIFA ---
                         def obtener_monto_tarifa(row):
-                            # Si fue ambulancia, se cobra el monto variable registrado en la operación
                             if row.get("Es_Ambulancia") == True:
                                 return float(row.get("costo_ambulancia_variable", 0.0))
                             
@@ -1194,7 +1203,6 @@ if es_admin_finanzas and tab_reporte:
                             tipo_unidad_row = str(row.get("Tipo", "")).strip()
                             
                             if not df_tar.empty:
-                                # Filtro en la tabla tarifas por usuario, cliente y tipo de unidad
                                 tarifa_match = df_tar[
                                     (df_tar["nombre_usuario"].astype(str).str.strip() == usuario_tarifa_buscar) &
                                     (df_tar["tipo_cliente"].astype(str).str.strip() == cliente_row) &
@@ -1206,19 +1214,34 @@ if es_admin_finanzas and tab_reporte:
                                     if pd.notnull(monto_val):
                                         return float(monto_val)
                             
-                            # Si no encuentra coincidencia en la tabla de tarifas, asigna un valor por defecto
                             return 1500.0
 
-                        # Aplicación de cálculo de tarifas y montos netos
                         df_periodo["Monto_por_Unidad"] = df_periodo.apply(obtener_monto_tarifa, axis=1)
                         df_periodo["Monto_Final_Unidad"] = df_periodo["Monto_por_Unidad"]
                         df_periodo["Costo_IMSS"] = 0.0
                         df_periodo["Subtotal"] = df_periodo["Monto_Final_Unidad"]
                         df_periodo["IVA"] = df_periodo["Subtotal"] * 0.16
-                        
-                        # CÁLCULO DINÁMICO DE RETENCIÓN DE ISR (1.25%)
                         df_periodo["Retencion_ISR"] = df_periodo["Subtotal"] * 0.0125 if aplica_retencion else 0.0
                         df_periodo["Total"] = df_periodo["Subtotal"] + df_periodo["IVA"] - df_periodo["Retencion_ISR"]
+
+                        # --- LIMPIEZA Y REORDENAMIENTO DE COLUMNAS ---
+                        cols_a_eliminar = [
+                            "id_operacion", "conductor_id", "unidad_id", "fecha_captura", 
+                            "user_id", "ambulancia", "costal", "tipo_cliente", "creado_por", "fecha_raw"
+                        ]
+                        cols_existentes_eliminar = [c for c in cols_a_eliminar if c in df_periodo.columns]
+                        df_periodo = df_periodo.drop(columns=cols_existentes_eliminar)
+
+                        # Reordenar columnas colocando costo_ambulancia_variable al lado de Es_Ambulancia
+                        columnas_ordenadas = []
+                        for col in df_periodo.columns:
+                            if col == "costo_ambulancia_variable":
+                                continue
+                            columnas_ordenadas.append(col)
+                            if col == "Es_Ambulancia":
+                                columnas_ordenadas.append("costo_ambulancia_variable")
+                        
+                        df_periodo = df_periodo[columnas_ordenadas]
 
                         dia_ini = fecha_ini.strftime('%d')
                         dia_fin = fecha_fin.strftime('%d')
@@ -1374,10 +1397,10 @@ if es_admin_finanzas and tab_reporte:
                                 pdf.cell(100, 10, label, border=1)
                                 pdf.cell(50, 10, f"${val:,.2f}", border=1, ln=True, align='R')
 
-                            pdf_bytes = pdf.output()
-                            if isinstance(pdf_bytes, str):
-                                return pdf_bytes.encode('latin1')
-                            return bytes(pdf_bytes)
+                            pdf_output = pdf.output()
+                            if isinstance(pdf_output, str):
+                                return pdf_output.encode('latin1')
+                            return bytes(pdf_output)
 
                         with col_btn1:
                             st.download_button(
