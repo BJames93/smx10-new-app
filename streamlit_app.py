@@ -1374,7 +1374,10 @@ if es_admin_finanzas and tab_reporte:
                                 pdf.cell(100, 10, label, border=1)
                                 pdf.cell(50, 10, f"${val:,.2f}", border=1, ln=True, align='R')
 
-                            return pdf.output(dest='S').encode('latin1')
+                            pdf_bytes = pdf.output()
+                            if isinstance(pdf_bytes, str):
+                                return pdf_bytes.encode('latin1')
+                            return bytes(pdf_bytes)
 
                         with col_btn1:
                             st.download_button(
