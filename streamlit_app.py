@@ -1002,11 +1002,13 @@ with tab7:
                     m3.metric("Paradas Planificadas", int(df_filtrado["paradas"].sum()))
                     st.write("---")
                     
+                    # CORRECCIÓN 1: Se usa 'id_operacion' en lugar de 'id'
                     df_mostrar = df_filtrado[[
-                        "id", "hora_llegada_hub_str", "Conductor", "Placas", 
+                        "id_operacion", "hora_llegada_hub_str", "Conductor", "Placas", 
                         "Tipo Unidad", "tipo_cliente", "status_operacion", 
                         "ambulancia", "paquetes_cargados", "paradas"
                     ]].rename(columns={
+                        "id_operacion": "ID Operación",
                         "hora_llegada_hub_str": "Hora de Arribo",
                         "tipo_cliente": "Cliente",
                         "status_operacion": "Condición",
@@ -1019,17 +1021,19 @@ with tab7:
                     st.divider()
                     st.subheader("🛠️ Gestión de Registros (Modificar o Eliminar)")
                     
-                    if "id" in df_filtrado.columns:
+                    # CORRECCIÓN 2: Validación e indexación usando 'id_operacion'
+                    if "id_operacion" in df_filtrado.columns:
                         opciones_editar = df_filtrado.apply(
-                            lambda x: f"ID: {x['id']} | {x['Hora de Arribo']} | {x['Conductor']} | {x['Placas']}",
+                            lambda x: f"ID: {x['id_operacion']} | {x['hora_llegada_hub_str']} | {x['Conductor']} | {x['Placas']}",
                             axis=1
                         ).tolist()
                         
                         registro_seleccionado = st.selectbox("Selecciona un viaje de la lista para gestionar:", [""] + opciones_editar)
                         
                         if registro_seleccionado:
-                            id_registro = int(registro_seleccionado.split(" | ")[0].replace("ID: ", ""))
-                            row_data = df_filtrado[df_filtrado["id"] == id_registro].iloc[0]
+                            # Se extrae el id_operacion como cadena de texto (UUID)
+                            id_registro = registro_seleccionado.split(" | ")[0].replace("ID: ", "").strip()
+                            row_data = df_filtrado[df_filtrado["id_operacion"] == id_registro].iloc[0]
                             
                             dict_cond_inv = {v: k for k, v in map_cond.items()}
                             dict_unid_inv = {v: k for k, v in map_unid.items()}
@@ -1089,19 +1093,21 @@ with tab7:
                                     "hora_llegada_hub": iso_llegada_nueva
                                 }
                                 try:
-                                    supabase.table("registro_operacion").update(datos_actualizados).eq("id", id_registro).execute()
+                                    # CORRECCIÓN 3: Se hace match con id_operacion
+                                    supabase.table("registro_operacion").update(datos_actualizados).eq("id_operacion", id_registro).execute()
                                     st.success("✅ ¡Registro actualizado! Presiona 'Buscar Capturas' para refrescar.")
                                 except Exception as e:
                                     st.error(f"Error al actualizar: {e}")
                                     
                             if btn_eliminar:
                                 try:
-                                    supabase.table("registro_operacion").delete().eq("id", id_registro).execute()
+                                    # CORRECCIÓN 4: Se elimina por id_operacion
+                                    supabase.table("registro_operacion").delete().eq("id_operacion", id_registro).execute()
                                     st.warning("🗑️ ¡Registro eliminado! Presiona 'Buscar Capturas' para refrescar.")
                                 except Exception as e:
                                     st.error(f"Error al eliminar: {e}")
                     else:
-                        st.error("Falta la columna 'id' Primary Key en la tabla de Supabase.")
+                        st.error("Falta la columna 'id_operacion' Primary Key en la tabla de Supabase.")
                 else:
                     st.warning(f"No se encontraron capturas entre {fecha_inicio} y {fecha_termino}.")
             else:
