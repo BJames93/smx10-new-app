@@ -349,11 +349,14 @@ with tab3:
                 except Exception as e:
                     st.error(f"Error al registrar unidad: {e}")
 
+
 # ==========================================
-# PESTAÑA 4: CONSULTA DE EXPEDIENTES
+# PESTAÑA 4: CONSULTA DE EXPEDIENTES (RESTAURADA COMPLETA)
 # ==========================================
 with tab4:
     st.header("🔍 Consulta Integral de Expedientes")
+    
+    user_sel_tab4 = "MOSTRAR TODOS"
     if nombre_usuario_activo in USUARIOS_MAESTROS and lista_nombres_usuarios:
         user_sel_tab4 = st.selectbox("👑 Filtrar Consulta General por Proveedor:", options=["MOSTRAR TODOS"] + lista_nombres_usuarios, key="user_sel_tab4")
         st.write("---")
@@ -380,31 +383,204 @@ with tab4:
         return zip_buffer.getvalue()
 
     if tipo_consulta == "Empresas":
-        res_emp = supabase.table("registro_empresa").select("*").execute()
-        df_emp = pd.DataFrame(res_emp.data)
-        if not df_emp.empty:
-            sel_empresa = st.selectbox("Seleccione Empresa:", [""] + df_emp['nombre_empresa'].tolist())
-            if sel_empresa:
-                reg_emp = df_emp[df_emp['nombre_empresa'] == sel_empresa].iloc[0].to_dict()
-                st.write(f"**RL:** {reg_emp.get('nombre_rl')} | **RFC:** {reg_emp.get('RFC')} | **CLABE:** {reg_emp.get('clabe_empresa')}")
+        try:
+            if user_sel_tab4 == "MOSTRAR TODOS":
+                res_emp = supabase.table("registro_empresa").select("*").in_("creado_por", usuarios_activos_ids).execute()
+            else:
+                res_emp = supabase.table("registro_empresa").select("*").eq("creado_por", mapa_usuarios_master[user_sel_tab4]).execute()
+                
+            df_emp = pd.DataFrame(res_emp.data)
+            
+            if not df_emp.empty:
+                df_emp['nombre_empresa'] = df_emp['nombre_empresa'].fillna("").astype(str)
+                lista_empresas = [""] + df_emp['nombre_empresa'].tolist()
+                sel_empresa = st.selectbox("Seleccione una Empresa para verificar:", options=lista_empresas)
+                
+                if sel_empresa:
+                    fila_emp = df_emp[df_emp['nombre_empresa'] == sel_empresa]
+                    if not fila_emp.empty:
+                        reg_emp = fila_emp.iloc[0].to_dict()
+                        
+                        st.subheader(f"🏢 Registro Corporativo: {sel_empresa}")
+                        
+                        col_info1, col_info2 = st.columns(2)
+                        with col_info1:
+                            st.markdown(f"""
+                            * **Nombre del Representante Legal (RL):** {reg_emp.get('nombre_rl', 'N/A')}
+                            * **RFC de la Empresa:** `{reg_emp.get('RFC', 'N/A')}`
+                            """)
+                        with col_info2:
+                            st.markdown(f"""
+                            * **Institución Bancaria:** {reg_emp.get('banco_empresa', 'N/A')}
+                            * **Cuenta CLABE:** `{reg_emp.get('clabe_empresa', 'N/A')}`
+                            """)
+                            
+                        st.write("---")
+                        st.write("### 📂 Estatus de Expediente Legal y Documentos")
+                        
+                        docs_emp = {
+                            "Identificación Oficial (INE RL)": "url_ine_rl",
+                            "Constancia de Situación Fiscal (CSF)": "url_constancia_fiscal",
+                            "Caratula Bancaria Validada": "url_caratula_bancaria",
+                            "Comprobante de Domicilio Vigente": "url_comprobante_domicilio"
+                        }
+                        
+                        documentos_emp_validos = {}
+                        c_emp_docs = st.columns(2)
+                        
+                        for i, (nombre_doc, key_db) in enumerate(docs_emp.items()):
+                            url_doc = reg_emp.get(key_db)
+                            col_destino = c_emp_docs[i % 2]
+                            
+                            if url_doc and isinstance(url_doc, str) and url_doc.startswith("http"):
+                                col_destino.link_button(f"📄 Abrir {nombre_doc}", url_doc, use_container_width=True)
+                                documentos_emp_validos[nombre_doc] = url_doc
+                            else:
+                                col_destino.error(f"❌ {nombre_doc}: Archivo No Encontrado / No Cargado")
+                                
+                        if documentos_emp_validos:
+                            st.write("---")
+                            st.download_button(
+                                label="📦 Descargar Expediente Corporativo Completo (ZIP)",
+                                data=generar_zip(documentos_emp_validos),
+                                file_name=f"Expediente_Legal_{sel_empresa.replace(' ', '_')}.zip",
+                                mime="application/zip",
+                                use_container_width=True
+                            )
+            else:
+                st.info("No se encontraron empresas registradas en este grupo o criterio.")
+        except Exception as e:
+            st.error(f"Error cargando los registros corporativos de Supabase: {e}")
 
     elif tipo_consulta == "Conductores":
-        res = supabase.table("alta_conductor").select("*").execute()
-        df = pd.DataFrame(res.data)
-        if not df.empty:
-            sel = st.selectbox("Seleccione Conductor:", [""] + df['nombre_driver'].tolist())
-            if sel:
-                reg = df[df['nombre_driver'] == sel].iloc[0].to_dict()
-                st.write(f"**RFC:** {reg.get('rfc')} | **Celular:** {reg.get('celular')} | **CLABE:** {reg.get('clabe_interbancaria')}")
+        try:
+            if nombre_usuario_activo in USUARIOS_MAESTROS:
+                if user_sel_tab4 == "MOSTRAR TODOS":
+                    res = supabase.table("alta_conductor").select("*").in_("creado_por", usuarios_activos_ids).execute()
+                else:
+                    res = supabase.table("alta_conductor").select("*").eq("creado_por", mapa_usuarios_master[user_sel_tab4]).execute()
+            else:
+                res = supabase.table("alta_conductor").select("*").eq("creado_por", usuario_id_activo).execute()
+            
+            df = pd.DataFrame(res.data)
+            
+            if not df.empty:
+                df['nombre_driver'] = df['nombre_driver'].fillna("").astype(str)
+                lista_conductores = [""] + df['nombre_driver'].tolist()
+                sel = st.selectbox("Seleccione Conductor:", options=lista_conductores)
+                
+                if sel:
+                    fila = df[df['nombre_driver'] == sel]
+                    if not fila.empty:
+                        reg = fila.iloc[0].to_dict()
+                        st.subheader(f"Expediente de: {sel}")
+                        c1, c2 = st.columns([1, 2])
+                        with c1:
+                            st.write(f"**RFC:** {reg.get('rfc', 'N/A')}")
+                            st.write(f"**Correo:** {reg.get('correo', 'N/A')}")
+                            st.write(f"**Celular:** {reg.get('celular', 'N/A')}")
+                            st.write(f"**Banco:** {reg.get('nombre_banco', 'N/A') or 'N/A'}")
+                            st.write(f"**CLABE:** {reg.get('clabe_interbancaria', 'N/A') or 'N/A'}")
+                            
+                            foto = reg.get('url_fotografia')
+                            if foto and isinstance(foto, str) and foto.startswith("http"):
+                                st.image(foto, width=200, caption="Foto de Perfil")
+                        with c2:
+                            st.write("### Documentación Digital")
+                            
+                            docs = {
+                                "CURP": "url_curp",
+                                "INE": "url_ine",
+                                "Constancia Fiscal": "url_constancia_fiscal",
+                                "Licencia de Conducir": "url_licencia",
+                                "Comprobante Domicilio": "url_comprobante_domicilio",
+                                "Caratula Bancaria": "url_caratula_bancaria",
+                                "Examen Toxicologico": "url_toxicologico",
+                                "Carta de Referencia": "url_carta_referencia",
+                                "Acta de Nacimiento": "url_acta_nacimiento",
+                                "Documento NSS": "url_nss"
+                            }
+                            
+                            documentos_validos = {}
+                            for nombre_doc_item, key in docs.items():
+                                url = reg.get(key)
+                                if url and isinstance(url, str) and url.startswith("http"):
+                                    st.link_button(f"📄 Ver {nombre_doc_item}", url)
+                                    documentos_validos[nombre_doc_item] = url
+                                else:
+                                    st.caption(f"❌ {nombre_doc_item}: No cargado")
+                            
+                            if documentos_validos:
+                                st.write("---")
+                                st.download_button(
+                                    label="📦 Descargar Expediente en ZIP",
+                                    data=generar_zip(documentos_validos),
+                                    file_name=f"Expediente_{sel.replace(' ', '_')}.zip",
+                                    mime="application/zip"
+                                )
+            else:
+                st.info("No se encontraron conductores registrados para este criterio.")
+        except Exception as e:
+            st.error(f"Error cargando conductores: {e}")
 
     elif tipo_consulta == "Unidades":
-        res = supabase.table("unidades").select("*").execute()
-        df = pd.DataFrame(res.data)
-        if not df.empty:
-            sel = st.selectbox("Seleccione Placas:", [""] + df['placas'].tolist())
-            if sel:
-                reg = df[df['placas'] == sel].iloc[0].to_dict()
-                st.write(f"**Marca:** {reg.get('marca')} | **Modelo:** {reg.get('modelo')} | **Tipo:** {reg.get('tipo_unidad')}")
+        try:
+            if nombre_usuario_activo in USUARIOS_MAESTROS:
+                if user_sel_tab4 == "MOSTRAR TODOS":
+                    res = supabase.table("unidades").select("*").in_("creado_por", usuarios_activos_ids).execute()
+                else:
+                    res = supabase.table("unidades").select("*").eq("creado_por", mapa_usuarios_master[user_sel_tab4]).execute()
+            else:
+                res = supabase.table("unidades").select("*").eq("creado_por", usuario_id_activo).execute()
+                
+            df = pd.DataFrame(res.data)
+            
+            if not df.empty:
+                df['placas'] = df['placas'].fillna("").astype(str)
+                lista_placas = [""] + df['placas'].tolist()
+                sel = st.selectbox("Seleccione Placas de la Unidad:", options=lista_placas)
+                
+                if sel:
+                    fila = df[df['placas'] == sel]
+                    if not fila.empty:
+                        reg = fila.iloc[0].to_dict()
+                        st.subheader(f"Unidad Placas: {sel}")
+                        st.write(f"**Marca:** {reg.get('marca', 'N/A')} | **Submarca:** {reg.get('submarca', 'N/A')} | **Modelo:** {reg.get('modelo', 'N/A')}")
+                        st.write(f"**Tipo de Unidad:** {reg.get('tipo_unidad', 'N/A')}")
+                        
+                        st.write("### Documentación e Inspección de Unidad")
+                        
+                        docs_u = {
+                            "Tarjeta de Circulación": "url_tarjeta_circulacion",
+                            "Póliza de Seguro": "url_poliza_seguro",
+                            "Fotografía VIN": "url_vin",
+                            "Foto Frontal": "url_foto_frontal",
+                            "Foto Trasera": "url_foto_trasera",
+                            "Foto Lateral Izquierda": "url_foto_izquierda",
+                            "Foto Lateral Derecha": "url_foto_derecha"
+                        }
+                        
+                        documentos_u_validos = {}
+                        for nombre_u, key in docs_u.items():
+                            url = reg.get(key)
+                            if url and isinstance(url, str) and url.startswith("http"):
+                                st.link_button(f"📄 Ver {nombre_u}", url)
+                                documentos_u_validos[nombre_u] = url
+                            else:
+                                st.caption(f"❌ {nombre_u}: No cargado")
+                                
+                        if documentos_u_validos:
+                            st.write("---")
+                            st.download_button(
+                                label="📦 Descargar Documentos e Inspección en ZIP",
+                                data=generar_zip(documentos_u_validos),
+                                file_name=f"Unidad_{sel.replace(' ', '_')}.zip",
+                                mime="application/zip"
+                            )
+            else:
+                st.info("No se encontraron unidades registradas para este criterio.")
+        except Exception as e:
+            st.error(f"Error cargando unidades: {e}")
 
 # ===============================================
 # PESTAÑA 5: ACTUALIZACIÓN DE EXPEDIENTES
