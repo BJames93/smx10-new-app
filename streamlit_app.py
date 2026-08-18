@@ -718,8 +718,8 @@ if es_admin_finanzas and tab_reporte:
 
                         def generar_pdf():
                             if FPDF is None:
-        st.error("❌ La librería 'fpdf2' no está instalada en el servidor. Revisa el archivo requirements.txt.")
-        return None
+                                st.error("❌ La librería 'fpdf2' no está instalada en el servidor. Revisa el archivo requirements.txt.")
+                                return None
                             
                             pdf = FPDF(orientation='L', unit='mm', format='A4')
                             pdf.set_auto_page_break(auto=True, margin=15)
