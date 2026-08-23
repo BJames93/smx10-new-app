@@ -937,11 +937,11 @@ with tab7:
             else:
                 filter_kw = ("eq", "creado_por", usuario_id_activo)
 
-            # Función adaptada: omite filtro de 'creado_por' si la tabla no lo contiene (ej. 'devoluciones')
+            # Función adaptada: omite filtro de 'creado_por' en devoluciones para evitar error 42703
             def query_tab7(table_name, select_cols="*"):
                 q = supabase.table(table_name).select(select_cols)
                 if table_name == "devoluciones":
-                    return q  # devoluciones no maneja la columna creado_por
+                    return q
                 
                 if filter_kw[0] == "in_":
                     return q.in_(filter_kw[1], filter_kw[2])
@@ -968,7 +968,7 @@ with tab7:
                 if not df_op.empty:
                     df_op["Conductor"] = df_op["conductor_id"].map(map_cond)
                     df_op["Placas"] = df_op["unidad_id"].map(map_unid)
-                    df_op["Tipo Unidad"] = df_op["unidad_id"].map(map_tipo_unid)
+                    df_op["Tipo"] = df_op["unidad_id"].map(map_tipo_unid)
                     df_op["hora_llegada_hub_raw"] = pd.to_datetime(df_op["hora_llegada_hub"]).dt.tz_localize(None)
                     df_op["fecha_match"] = df_op["hora_llegada_hub_raw"].dt.date
 
@@ -989,7 +989,7 @@ with tab7:
                     df_filtrado = df_op.loc[mascara].copy()
 
                     if not df_filtrado.empty:
-                        df_filtrado["hora_llegada_hub_str"] = df_filtrado["hora_llegada_hub_raw"].dt.strftime('%Y-%m-%d %H:%M')
+                        df_filtrado["Hora_Arribo"] = df_filtrado["hora_llegada_hub_raw"].dt.strftime('%Y-%m-%d %H:%M')
                         st.session_state["tab7_df"] = df_filtrado
                     else:
                         st.warning(f"No se encontraron despachos operativos entre {fecha_inicio_tab7} y {fecha_termino_tab7}.")
@@ -1047,38 +1047,41 @@ with tab7:
             st.write("---")
 
             col_id_op = "id_operacion" if "id_operacion" in df_filtrado.columns else "id"
-            columnas_mostrar = [col_id_op, "hora_llegada_hub_str", "Conductor", "Placas", "Tipo Unidad", "tipo_cliente", "status_operacion", "ambulancia", "costo_ambulancia_variable"]
-            if "costal" in df_filtrado.columns: columnas_mostrar.append("costal")
-            if "paquetes_devueltos" in df_filtrado.columns: columnas_mostrar.append("paquetes_devueltos")
-            columnas_mostrar.extend(["paquetes_cargados", "paradas"])
-            columnas_existentes = [c for c in columnas_mostrar if c in df_filtrado.columns]
-            
-            df_mostrar = df_filtrado[columnas_existentes].rename(columns={
-                col_id_op: "ID Operación", "hora_llegada_hub_str": "Hora de Arribo", 
-                "tipo_cliente": "Cliente", "status_operacion": "Condición", 
-                "paquetes_cargados": "Paquetes", "paquetes_devueltos": "Devols.", 
-                "paradas": "Paradas", "costo_ambulancia_variable": "Costo Amb."
-            })
 
-            if "Costo Amb." in df_mostrar.columns:
-                df_mostrar["Costo Amb."] = df_mostrar["Costo Amb."].fillna(0.0)
-                
-            if "Paquetes" in df_mostrar.columns and "Devols." in df_mostrar.columns:
-                df_mostrar["Performance %"] = df_mostrar.apply(
-                    lambda x: ((x["Paquetes"] - x["Devols."]) / x["Paquetes"] * 100) if x["Paquetes"] > 0 else 0, axis=1
+            # 1. Filtramos y removemos las columnas duplicadas / no solicitadas
+            columnas_a_remover = [
+                "status_operacion", 
+                "hora_llegada_hub", 
+                "hora_salida_hub", 
+                "paquetes_cargados", 
+                "paradas"
+            ]
+            
+            df_mostrar = df_filtrado.drop(columns=[c for c in columnas_a_remover if c in df_filtrado.columns], errors="ignore").copy()
+
+            # 2. Renombrado y formato
+            if "costo_ambulancia_variable" in df_mostrar.columns:
+                df_mostrar["Costo Amb."] = df_mostrar["costo_ambulancia_variable"].fillna(0.0)
+                df_mostrar.drop(columns=["costo_ambulancia_variable"], inplace=True)
+
+            if "paquetes_cargados" in df_filtrado.columns and "paquetes_devueltos" in df_filtrado.columns:
+                df_mostrar["Performance %"] = df_filtrado.apply(
+                    lambda x: ((x["paquetes_cargados"] - x["paquetes_devueltos"]) / x["paquetes_cargados"] * 100) if x["paquetes_cargados"] > 0 else 0, axis=1
                 )
 
+            # Ocultamos auxiliares internos
+            columnas_ocultar_internas = ["_label", "fecha_match", "hora_llegada_hub_raw", "conductor_id", "unidad_id", "creado_por"]
+            df_mostrar = df_mostrar.drop(columns=[c for c in columnas_ocultar_internas if c in df_mostrar.columns], errors="ignore")
+
             configuracion_columnas = {
-                "Cliente": st.column_config.TextColumn("Cliente", width="small"),
-                "Condición": st.column_config.TextColumn("Condición", width="small"),
+                "tipo_cliente": st.column_config.TextColumn("Cliente", width="small"),
                 "ambulancia": st.column_config.CheckboxColumn("Ambulancia", width="small"),
                 "Costo Amb.": st.column_config.NumberColumn("Costo Amb.", format="$ %.2f"),
                 "costal": st.column_config.CheckboxColumn("Costal", width="small"),
-                "Paquetes": st.column_config.NumberColumn("Paquetes", width="small"),
-                "Devols.": st.column_config.NumberColumn("Devols.", width="small"),
-                "Paradas": st.column_config.NumberColumn("Paradas", width="small"),
+                "paquetes_devueltos": st.column_config.NumberColumn("Devols.", width="small"),
                 "Performance %": st.column_config.NumberColumn("Performance %", format="%.1f %%", width="small")
             }
+
             st.dataframe(df_mostrar, use_container_width=True, hide_index=True, column_config=configuracion_columnas)
 
             # --- MODIFICAR O ELIMINAR DESPACHO ---
@@ -1086,7 +1089,7 @@ with tab7:
             st.subheader("🛠️ Gestión de Registros (Modificar o Eliminar Despacho)")
             
             df_filtrado["_label"] = df_filtrado.apply(
-                lambda x: f"ID: {x[col_id_op]} | {x['hora_llegada_hub_str']} | {x['Conductor'] if pd.notna(x['Conductor']) else 'Sin conductor'} | {x['Placas'] if pd.notna(x['Placas']) else 'Sin placas'}", 
+                lambda x: f"ID: {x[col_id_op]} | {x['Hora_Arribo']} | {x['Conductor'] if pd.notna(x['Conductor']) else 'Sin conductor'} | {x['Placas'] if pd.notna(x['Placas']) else 'Sin placas'}", 
                 axis=1
             )
             opciones = df_filtrado["_label"].tolist()
