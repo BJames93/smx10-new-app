@@ -937,7 +937,7 @@ with tab7:
             else:
                 filter_kw = ("eq", "creado_por", usuario_id_activo)
 
-            # Función adaptada: omite filtro de 'creado_por' en devoluciones para evitar error 42703
+            # Omitir filtro creado_por en devoluciones para evitar error 42703
             def query_tab7(table_name, select_cols="*"):
                 q = supabase.table(table_name).select(select_cols)
                 if table_name == "devoluciones":
@@ -947,7 +947,7 @@ with tab7:
                     return q.in_(filter_kw[1], filter_kw[2])
                 return q.eq(filter_kw[1], filter_kw[2])
 
-            # 2. Descargar catálogos filtrados por usuario
+            # 2. Descargar catálogos
             cond_db = query_tab7("alta_conductor", "id_conductor, nombre_driver").execute().data
             unid_db = query_tab7("unidades", "id_unidad, placas, tipo_unidad").execute().data
 
@@ -972,7 +972,7 @@ with tab7:
                     df_op["hora_llegada_hub_raw"] = pd.to_datetime(df_op["hora_llegada_hub"]).dt.tz_localize(None)
                     df_op["fecha_match"] = df_op["hora_llegada_hub_raw"].dt.date
 
-                    # Cruce con Devoluciones para Performance
+                    # Cruce con Devoluciones
                     res_dev = query_tab7("devoluciones", "fecha_devolucion, conductor_id, unidad_id, paquetes_devueltos").execute()
                     df_dev = pd.DataFrame(res_dev.data)
                     
@@ -1048,30 +1048,32 @@ with tab7:
 
             col_id_op = "id_operacion" if "id_operacion" in df_filtrado.columns else "id"
 
-            # 1. Filtramos y removemos las columnas duplicadas / no solicitadas
-            columnas_a_remover = [
+            # 1. Definimos explícitamente cuáles columnas MOSTRAR en la tabla visual (excluyendo las duplicadas)
+            cols_eliminar_vista = [
                 "status_operacion", 
                 "hora_llegada_hub", 
                 "hora_salida_hub", 
                 "paquetes_cargados", 
-                "paradas"
+                "paradas",
+                "conductor_id",
+                "unidad_id",
+                "creado_por",
+                "fecha_match",
+                "hora_llegada_hub_raw"
             ]
             
-            df_mostrar = df_filtrado.drop(columns=[c for c in columnas_a_remover if c in df_filtrado.columns], errors="ignore").copy()
+            # Mantenemos df_filtrado intacto para los cálculos/formularios y creamos df_vista solo para mostrar
+            cols_visibles = [c for c in df_filtrado.columns if c not in cols_eliminar_vista]
+            df_vista = df_filtrado[cols_visibles].copy()
 
-            # 2. Renombrado y formato
-            if "costo_ambulancia_variable" in df_mostrar.columns:
-                df_mostrar["Costo Amb."] = df_mostrar["costo_ambulancia_variable"].fillna(0.0)
-                df_mostrar.drop(columns=["costo_ambulancia_variable"], inplace=True)
+            if "costo_ambulancia_variable" in df_vista.columns:
+                df_vista["Costo Amb."] = df_vista["costo_ambulancia_variable"].fillna(0.0)
+                df_vista.drop(columns=["costo_ambulancia_variable"], inplace=True)
 
             if "paquetes_cargados" in df_filtrado.columns and "paquetes_devueltos" in df_filtrado.columns:
-                df_mostrar["Performance %"] = df_filtrado.apply(
+                df_vista["Performance %"] = df_filtrado.apply(
                     lambda x: ((x["paquetes_cargados"] - x["paquetes_devueltos"]) / x["paquetes_cargados"] * 100) if x["paquetes_cargados"] > 0 else 0, axis=1
                 )
-
-            # Ocultamos auxiliares internos
-            columnas_ocultar_internas = ["_label", "fecha_match", "hora_llegada_hub_raw", "conductor_id", "unidad_id", "creado_por"]
-            df_mostrar = df_mostrar.drop(columns=[c for c in columnas_ocultar_internas if c in df_mostrar.columns], errors="ignore")
 
             configuracion_columnas = {
                 "tipo_cliente": st.column_config.TextColumn("Cliente", width="small"),
@@ -1082,14 +1084,15 @@ with tab7:
                 "Performance %": st.column_config.NumberColumn("Performance %", format="%.1f %%", width="small")
             }
 
-            st.dataframe(df_mostrar, use_container_width=True, hide_index=True, column_config=configuracion_columnas)
+            st.dataframe(df_vista, use_container_width=True, hide_index=True, column_config=configuracion_columnas)
 
             # --- MODIFICAR O ELIMINAR DESPACHO ---
             st.write("---")
             st.subheader("🛠️ Gestión de Registros (Modificar o Eliminar Despacho)")
             
+            # Usamos df_filtrado directamente que contiene todas las columnas requeridas sin errores
             df_filtrado["_label"] = df_filtrado.apply(
-                lambda x: f"ID: {x[col_id_op]} | {x['Hora_Arribo']} | {x['Conductor'] if pd.notna(x['Conductor']) else 'Sin conductor'} | {x['Placas'] if pd.notna(x['Placas']) else 'Sin placas'}", 
+                lambda x: f"ID: {x[col_id_op]} | {x.get('Hora_Arribo', '')} | {x['Conductor'] if pd.notna(x.get('Conductor')) else 'Sin conductor'} | {x['Placas'] if pd.notna(x.get('Placas')) else 'Sin placas'}", 
                 axis=1
             )
             opciones = df_filtrado["_label"].tolist()
@@ -1111,12 +1114,12 @@ with tab7:
                         nueva_fecha = st.date_input("Fecha de Arribo", value=fila["hora_llegada_hub_raw"].date())
                         nueva_hora = st.time_input("Hora de Arribo", value=fila["hora_llegada_hub_raw"].time())
                         
-                        cond_actual = fila["Conductor"]
+                        cond_actual = fila.get("Conductor", "")
                         idx_cond = list(dict_cond_inv.keys()).index(cond_actual) if cond_actual in dict_cond_inv else 0
                         nuevo_cond = st.selectbox("Conductor", list(dict_cond_inv.keys()), index=idx_cond)
                         nuevo_cond_id = dict_cond_inv[nuevo_cond]
 
-                        unid_actual = fila["Placas"]
+                        unid_actual = fila.get("Placas", "")
                         idx_unid = list(dict_unid_inv.keys()).index(unid_actual) if unid_actual in dict_unid_inv else 0
                         nueva_placa = st.selectbox("Placas / Unidad", list(dict_unid_inv.keys()), index=idx_unid)
                         nueva_unid_id = dict_unid_inv[nueva_placa]
@@ -1209,11 +1212,11 @@ with tab7:
                     fd1, fd2 = st.columns(2)
                     nueva_fecha_d = fd1.date_input("Fecha", value=fila_dev["fecha_dev_raw"])
                     
-                    cond_actual_d = fila_dev["Conductor"]
+                    cond_actual_d = fila_dev.get("Conductor", "")
                     idx_cond_d = list(dict_cond_inv.keys()).index(cond_actual_d) if cond_actual_d in dict_cond_inv else 0
                     nuevo_cond_d = fd1.selectbox("Conductor", list(dict_cond_inv.keys()), index=idx_cond_d)
                     
-                    unid_actual_d = fila_dev["Placas"]
+                    unid_actual_d = fila_dev.get("Placas", "")
                     idx_unid_d = list(dict_unid_inv.keys()).index(unid_actual_d) if unid_actual_d in dict_unid_inv else 0
                     nueva_placa_d = fd2.selectbox("Placas", list(dict_unid_inv.keys()), index=idx_unid_d)
 
