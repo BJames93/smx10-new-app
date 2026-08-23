@@ -899,7 +899,7 @@ with tab6:
 with tab7:
     st.header("📊 Verificación de Captura y Edición")
 
-    # --- FILTRO MAESTRO DE USUARIOS (Específico para TAB 7) ---
+    # --- FILTRO MAESTRO DE USUARIOS ---
     if nombre_usuario_activo in USUARIOS_MAESTROS and lista_nombres_usuarios:
         user_sel_tab7 = st.selectbox(
             "👑 Filtrar Reportes y Tablas Operativas por Usuario:",
@@ -927,7 +927,7 @@ with tab7:
 
     if st.button("Buscar Capturas", key="btn_buscar_tab7"):
         try:
-            # 1. Determinación de filtro por usuario activo o máster
+            # 1. Determinación de filtro por usuario
             if nombre_usuario_activo in USUARIOS_MAESTROS:
                 if user_sel_tab7 == "MOSTRAR TODOS":
                     filter_kw = ("in_", "creado_por", usuarios_activos_ids)
@@ -937,14 +937,17 @@ with tab7:
             else:
                 filter_kw = ("eq", "creado_por", usuario_id_activo)
 
-            # Función para aplicar el alcance de permisos a las consultas de Supabase
+            # Función adaptada: omite filtro de 'creado_por' si la tabla no lo contiene (ej. 'devoluciones')
             def query_tab7(table_name, select_cols="*"):
                 q = supabase.table(table_name).select(select_cols)
+                if table_name == "devoluciones":
+                    return q  # devoluciones no maneja la columna creado_por
+                
                 if filter_kw[0] == "in_":
                     return q.in_(filter_kw[1], filter_kw[2])
                 return q.eq(filter_kw[1], filter_kw[2])
 
-            # 2. Descargar catálogos filtrados
+            # 2. Descargar catálogos filtrados por usuario
             cond_db = query_tab7("alta_conductor", "id_conductor, nombre_driver").execute().data
             unid_db = query_tab7("unidades", "id_unidad, placas, tipo_unidad").execute().data
 
@@ -1209,7 +1212,7 @@ with tab7:
                     
                     unid_actual_d = fila_dev["Placas"]
                     idx_unid_d = list(dict_unid_inv.keys()).index(unid_actual_d) if unid_actual_d in dict_unid_inv else 0
-                    nueva_placa_d = fd1.selectbox("Placas", list(dict_unid_inv.keys()), index=idx_unid_d)
+                    nueva_placa_d = fd2.selectbox("Placas", list(dict_unid_inv.keys()), index=idx_unid_d)
 
                     cli_actual_d = fila_dev.get("tipo_cliente", "")
                     idx_cli_d = ["Mercado Libre", "Amazon"].index(cli_actual_d) if cli_actual_d in ["Mercado Libre", "Amazon"] else 0
