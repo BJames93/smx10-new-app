@@ -947,13 +947,18 @@ with tab7:
                     return q.in_(filter_kw[1], filter_kw[2])
                 return q.eq(filter_kw[1], filter_kw[2])
 
-            # 2. Descargar catálogos
-            cond_db = query_tab7("alta_conductor", "id_conductor, nombre_driver").execute().data
-            unid_db = query_tab7("unidades", "id_unidad, placas, tipo_unidad").execute().data
+            # 2. Descargar catálogos completos (incluyendo datos bancarios y marca)
+            cond_db = query_tab7("alta_conductor", "*").execute().data
+            unid_db = query_tab7("unidades", "*").execute().data
 
-            map_cond = {c["id_conductor"]: c["nombre_driver"] for c in cond_db}
-            map_unid = {u["id_unidad"]: u["placas"] for u in unid_db}
+            map_cond = {c["id_conductor"]: c.get("nombre_driver", "") for c in cond_db}
+            map_banco = {c["id_conductor"]: c.get("banco", "N/A") for c in cond_db}
+            map_clabe = {c["id_conductor"]: c.get("cuenta_clabe", "N/A") for c in cond_db}
+            map_empresa = {c["id_conductor"]: c.get("empresa_proveedor", c.get("empresa", "N/A")) for c in cond_db}
+
+            map_unid = {u["id_unidad"]: u.get("placas", "") for u in unid_db}
             map_tipo_unid = {u["id_unidad"]: u.get("tipo_unidad", "N/A") for u in unid_db}
+            map_marca_unid = {u["id_unidad"]: u.get("marca", u.get("marca_vehiculo", "N/A")) for u in unid_db}
 
             st.session_state["tab7_map_cond"] = map_cond
             st.session_state["tab7_map_unid"] = map_unid
@@ -966,9 +971,16 @@ with tab7:
                 df_op = pd.DataFrame(res_op.data)
 
                 if not df_op.empty:
+                    # Mapeos completos
                     df_op["Conductor"] = df_op["conductor_id"].map(map_cond)
+                    df_op["Banco"] = df_op["conductor_id"].map(map_banco)
+                    df_op["Cuenta_clabe"] = df_op["conductor_id"].map(map_clabe)
+                    df_op["Empresa_Proveedor"] = df_op["conductor_id"].map(map_empresa)
+
                     df_op["Placas"] = df_op["unidad_id"].map(map_unid)
                     df_op["Tipo"] = df_op["unidad_id"].map(map_tipo_unid)
+                    df_op["Marca_del_Vehiculo"] = df_op["unidad_id"].map(map_marca_unid)
+
                     df_op["hora_llegada_hub_raw"] = pd.to_datetime(df_op["hora_llegada_hub"]).dt.tz_localize(None)
                     df_op["fecha_match"] = df_op["hora_llegada_hub_raw"].dt.date
 
@@ -990,6 +1002,14 @@ with tab7:
 
                     if not df_filtrado.empty:
                         df_filtrado["Hora_Arribo"] = df_filtrado["hora_llegada_hub_raw"].dt.strftime('%Y-%m-%d %H:%M')
+                        
+                        # Mapeo de días en español
+                        dias_espanol = {
+                            "Monday": "Lunes", "Tuesday": "Martes", "Wednesday": "Miércoles",
+                            "Thursday": "Jueves", "Friday": "Viernes", "Saturday": "Sábado", "Sunday": "Domingo"
+                        }
+                        df_filtrado["Dia_Semana"] = df_filtrado["hora_llegada_hub_raw"].dt.strftime('%A').map(dias_espanol)
+
                         st.session_state["tab7_df"] = df_filtrado
                     else:
                         st.warning(f"No se encontraron despachos operativos entre {fecha_inicio_tab7} y {fecha_termino_tab7}.")
@@ -1048,40 +1068,53 @@ with tab7:
 
             col_id_op = "id_operacion" if "id_operacion" in df_filtrado.columns else "id"
 
-            # 1. Definimos explícitamente cuáles columnas MOSTRAR en la tabla visual (excluyendo las duplicadas)
-            cols_eliminar_vista = [
-                "status_operacion", 
-                "hora_llegada_hub", 
-                "hora_salida_hub", 
-                "paquetes_cargados", 
-                "paradas",
-                "conductor_id",
-                "unidad_id",
-                "creado_por",
-                "fecha_match",
-                "hora_llegada_hub_raw"
+            # 1. Copia de trabajo para la vista
+            df_v = df_filtrado.copy()
+
+            # 2. Homologación y cálculo de las columnas solicitadas
+            df_v["svc"] = df_v.get("svc", df_v.get("hub", "SMX1"))
+            df_v["Cliente"] = df_v.get("tipo_cliente", "N/A")
+            df_v["Condicion"] = df_v.get("status_operacion", "En ruta")
+            df_v["Paquetes"] = df_v.get("paquetes_cargados", 0)
+            df_v["Paradas"] = df_v.get("paradas", 0)
+            df_v["Es_Ambulancia"] = df_v.get("ambulancia", False)
+            df_v["costo_ambulancia_variable"] = df_v.get("costo_ambulancia_variable", 0.0).fillna(0.0)
+            df_v["Es_Costal"] = df_v.get("costal", False)
+
+            # Cálculos Financieros (Si existen las columnas base, de lo contrario valores de respaldo)
+            df_v["Monto_por_Unidad"] = df_v.get("monto_unidad", 0.0)
+            df_v["Monto_Final_Unidad"] = df_v.get("monto_final_unidad", df_v["Monto_por_Unidad"] + df_v["costo_ambulancia_variable"])
+            df_v["Costo_IMSS"] = df_v.get("costo_imss", 0.0)
+            df_v["Subtotal"] = df_v.get("subtotal", df_v["Monto_Final_Unidad"])
+            df_v["IVA"] = df_v.get("iva", df_v["Subtotal"] * 0.16)
+            df_v["Retencion_ISR"] = df_v.get("retencion_isr", 0.0)
+            df_v["Total"] = df_v.get("total", df_v["Subtotal"] + df_v["IVA"] - df_v["Retencion_ISR"])
+
+            # 3. LISTA EXACTA DE COLUMNAS A MOSTRAR (EN ESTE ORDEN STRICTO)
+            columnas_permitidas = [
+                "svc", "Empresa_Proveedor", "Conductor", "Banco", "Cuenta_clabe", 
+                "Placas", "Marca_del_Vehiculo", "Tipo", "Hora_Arribo", "Dia_Semana", 
+                "Cliente", "Condicion", "Paquetes", "Paradas", "Es_Ambulancia", 
+                "costo_ambulancia_variable", "Es_Costal", "Monto_por_Unidad", 
+                "Monto_Final_Unidad", "Costo_IMSS", "Subtotal", "IVA", "Retencion_ISR", "Total"
             ]
-            
-            # Mantenemos df_filtrado intacto para los cálculos/formularios y creamos df_vista solo para mostrar
-            cols_visibles = [c for c in df_filtrado.columns if c not in cols_eliminar_vista]
-            df_vista = df_filtrado[cols_visibles].copy()
 
-            if "costo_ambulancia_variable" in df_vista.columns:
-                df_vista["Costo Amb."] = df_vista["costo_ambulancia_variable"].fillna(0.0)
-                df_vista.drop(columns=["costo_ambulancia_variable"], inplace=True)
+            # Filtrar solo las columnas que existen
+            cols_finales = [c for c in columnas_permitidas if c in df_v.columns]
+            df_vista = df_v[cols_finales].copy()
 
-            if "paquetes_cargados" in df_filtrado.columns and "paquetes_devueltos" in df_filtrado.columns:
-                df_vista["Performance %"] = df_filtrado.apply(
-                    lambda x: ((x["paquetes_cargados"] - x["paquetes_devueltos"]) / x["paquetes_cargados"] * 100) if x["paquetes_cargados"] > 0 else 0, axis=1
-                )
-
+            # Configuración de formato para la tabla
             configuracion_columnas = {
-                "tipo_cliente": st.column_config.TextColumn("Cliente", width="small"),
-                "ambulancia": st.column_config.CheckboxColumn("Ambulancia", width="small"),
-                "Costo Amb.": st.column_config.NumberColumn("Costo Amb.", format="$ %.2f"),
-                "costal": st.column_config.CheckboxColumn("Costal", width="small"),
-                "paquetes_devueltos": st.column_config.NumberColumn("Devols.", width="small"),
-                "Performance %": st.column_config.NumberColumn("Performance %", format="%.1f %%", width="small")
+                "Es_Ambulancia": st.column_config.CheckboxColumn("Es Ambulancia", width="small"),
+                "Es_Costal": st.column_config.CheckboxColumn("Es Costal", width="small"),
+                "costo_ambulancia_variable": st.column_config.NumberColumn("Costo Amb. Var.", format="$ %.2f"),
+                "Monto_por_Unidad": st.column_config.NumberColumn("Monto x Unidad", format="$ %.2f"),
+                "Monto_Final_Unidad": st.column_config.NumberColumn("Monto Final", format="$ %.2f"),
+                "Costo_IMSS": st.column_config.NumberColumn("Costo IMSS", format="$ %.2f"),
+                "Subtotal": st.column_config.NumberColumn("Subtotal", format="$ %.2f"),
+                "IVA": st.column_config.NumberColumn("IVA (16%)", format="$ %.2f"),
+                "Retencion_ISR": st.column_config.NumberColumn("Retención ISR", format="$ %.2f"),
+                "Total": st.column_config.NumberColumn("Total", format="$ %.2f")
             }
 
             st.dataframe(df_vista, use_container_width=True, hide_index=True, column_config=configuracion_columnas)
@@ -1090,7 +1123,6 @@ with tab7:
             st.write("---")
             st.subheader("🛠️ Gestión de Registros (Modificar o Eliminar Despacho)")
             
-            # Usamos df_filtrado directamente que contiene todas las columnas requeridas sin errores
             df_filtrado["_label"] = df_filtrado.apply(
                 lambda x: f"ID: {x[col_id_op]} | {x.get('Hora_Arribo', '')} | {x['Conductor'] if pd.notna(x.get('Conductor')) else 'Sin conductor'} | {x['Placas'] if pd.notna(x.get('Placas')) else 'Sin placas'}", 
                 axis=1
