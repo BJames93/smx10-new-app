@@ -1749,6 +1749,3 @@ if es_admin_finanzas and tab_reporte:
                         st.warning("No se encontraron viajes capturados para la selección o periodo indicado.")
             except Exception as e:
                 st.error(f"Error al generar la conciliación: {e}")
-                        st.warning("No se encontraron viajes capturados para la selección o periodo indicado.")
-            except Exception as e:
-                st.error(f"Error al generar la conciliación: {e}")
