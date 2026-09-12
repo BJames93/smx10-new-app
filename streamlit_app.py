@@ -1421,47 +1421,12 @@ if es_admin_finanzas and tab_reporte:
 
         st.divider()
 
-        # --- SELECCIÓN RÁPIDA DE MES Y AÑO PARA EL CALENDARIO ---
-        st.markdown("##### 📅 Selección Rápida por Mes y Año")
-        col_m1, col_m2 = st.columns(2)
-        
-        meses_nombres = {
-            1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
-            7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
-        }
-        
-        with col_m1:
-            mes_sel_nombre = st.selectbox(
-                "Selecciona el Mes:",
-                options=list(meses_nombres.values()),
-                index=datetime.now().month - 1,
-                key="rec_sel_mes_rapido"
-            )
-            mes_num = [k for k, v in meses_nombres.items() if v == mes_sel_nombre][0]
-            
-        with col_m2:
-            anio_actual = datetime.now().year
-            anio_sel = st.selectbox(
-                "Selecciona el Año:",
-                options=list(range(anio_actual - 2, anio_actual + 3)),
-                index=2, # Apunta por defecto al año actual
-                key="rec_sel_anio_rapido"
-            )
-
-        # Calcular automáticamente los límites (primer y último día) del mes seleccionado
-        import calendar
-        default_fini = datetime(anio_sel, mes_num, 1).date()
-        ultimo_dia = calendar.monthrange(anio_sel, mes_num)[1]
-        default_ffin = datetime(anio_sel, mes_num, ultimo_dia).date()
-
-        st.write("---")
-
-        # Parámetros de selección del periodo de corte con calendario nativo desplegable
+        # Parámetros directos de selección del periodo de corte con calendario nativo desplegable
         c1, c2, c3 = st.columns(3)
         with c1:
-            fecha_ini = st.date_input("Fecha Inicio de Corte", value=default_fini, key="rec_fini")
+            fecha_ini = st.date_input("Fecha Inicio de Corte", key="rec_fini")
         with c2:
-            fecha_fin = st.date_input("Fecha Fin de Corte", value=default_ffin, key="rec_ffin")
+            fecha_fin = st.date_input("Fecha Fin de Corte", key="rec_ffin")
         with c3:
             semana_corte = st.number_input("Número de Semana (Ej. 24)", min_value=1, step=1, value=24, key="rec_sem")
             
