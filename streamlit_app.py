@@ -1421,7 +1421,7 @@ if es_admin_finanzas and tab_reporte:
 
         st.divider()
 
-        # Parámetros directos de selección del periodo de corte con calendario nativo desplegable
+        # Parámetros de selección del periodo de corte
         c1, c2, c3 = st.columns(3)
         with c1:
             fecha_ini = st.date_input("Fecha Inicio de Corte", key="rec_fini")
