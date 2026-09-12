@@ -1434,14 +1434,14 @@ if es_admin_finanzas and tab_reporte:
             mes_seleccionado_nombre = st.selectbox(
                 "Selecciona el Mes:",
                 options=list(meses_nombres.values()),
-                index=date.today().month - 1,
+                index=datetime.now().month - 1,
                 key="rec_sel_mes"
             )
             # Mapear nombre a número de mes
             mes_seleccionado = [k for k, v in meses_nombres.items() if v == mes_seleccionado_nombre][0]
             
         with col_m_sel2:
-            anio_actual = date.today().year
+            anio_actual = datetime.now().year
             anio_seleccionado = st.selectbox(
                 "Selecciona el Año:",
                 options=list(range(anio_actual - 2, anio_actual + 3)),
@@ -1451,9 +1451,9 @@ if es_admin_finanzas and tab_reporte:
 
         # Calcular el primer y último día del mes seleccionado automáticamente
         import calendar
-        primer_dia_mes = date(anio_seleccionado, mes_seleccionado, 1)
+        primer_dia_mes = datetime(anio_seleccionado, mes_seleccionado, 1).date()
         ultimo_dia_numero = calendar.monthrange(anio_seleccionado, mes_seleccionado)[1]
-        ultimo_dia_mes = date(anio_seleccionado, mes_seleccionado, ultimo_dia_numero)
+        ultimo_dia_mes = datetime(anio_seleccionado, mes_seleccionado, ultimo_dia_numero).date()
 
         st.write("---")
 
@@ -1746,6 +1746,9 @@ if es_admin_finanzas and tab_reporte:
                                 mime="application/pdf"
                             )
                     else:
+                        st.warning("No se encontraron viajes capturados para la selección o periodo indicado.")
+            except Exception as e:
+                st.error(f"Error al generar la conciliación: {e}")
                         st.warning("No se encontraron viajes capturados para la selección o periodo indicado.")
             except Exception as e:
                 st.error(f"Error al generar la conciliación: {e}")
