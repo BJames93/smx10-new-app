@@ -747,17 +747,17 @@ with tab5:
                 st.error("No se encontró ninguna unidad con esas placas vinculada a tu cuenta o sistema.")
 
     # NUEVO - ACTUALIZACIÓN EMPRESA: Gestión independiente para consultar y actualizar datos y documentos de la empresa existente
-    elif tipo_expediente == "Empresa":
+    elif tipo_expediente == "registro_empresa":
         rfc_empresa_busqueda = st.text_input("Ingresa el RFC de la empresa para actualizar:")
         
         if rfc_empresa_busqueda:
             if nombre_usuario_activo in USUARIOS_MAESTROS:
                 if user_sel_tab5 == "MOSTRAR TODOS":
-                    res_emp = supabase.table("empresas").select("*").eq("rfc", rfc_empresa_busqueda.upper()).execute()
+                    res_emp = supabase.table("registro_empresa").select("*").eq("rfc", rfc_empresa_busqueda.upper()).execute()
                 else:
-                    res_emp = supabase.table("empresas").select("*").eq("rfc", rfc_empresa_busqueda.upper()).eq("creado_por", mapa_usuarios_master[user_sel_tab5]).execute()
+                    res_emp = supabase.table("registro_empresa").select("*").eq("rfc", rfc_empresa_busqueda.upper()).eq("creado_por", mapa_usuarios_master[user_sel_tab5]).execute()
             else:
-                res_emp = supabase.table("empresas").select("*").eq("rfc", rfc_empresa_busqueda.upper()).eq("creado_por", usuario_id_activo).execute()
+                res_emp = supabase.table("registro_empresa").select("*").eq("rfc", rfc_empresa_busqueda.upper()).eq("creado_por", usuario_id_activo).execute()
             
             if res_emp.data:
                 reg_emp = res_emp.data[0]
