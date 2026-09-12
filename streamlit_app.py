@@ -593,7 +593,6 @@ with tab5:
         st.write("---")
 
     st.info("Utiliza esta sección para subir documentos faltantes, renovaciones o actualizar datos de conductores, unidades y empresas.")
-    # NUEVO - ACTUALIZACIÓN EMPRESA: Se agrega "Empresa" al selector de tipo de expediente
     tipo_expediente = st.radio("Selecciona el tipo de expediente a gestionar:", ["Conductores", "Unidades", "Empresa"], horizontal=True)
     st.write("---")
     
@@ -746,23 +745,24 @@ with tab5:
             else:
                 st.error("No se encontró ninguna unidad con esas placas vinculada a tu cuenta o sistema.")
 
-    # NUEVO - ACTUALIZACIÓN EMPRESA: Gestión independiente para consultar y actualizar datos y documentos de la empresa existente
-    elif tipo_expediente == "registro_empresa":
-        rfc_empresa_busqueda = st.text_input("Ingresa el RFC de la empresa para actualizar:")
+    # NUEVO - ACTUALIZACIÓN EMPRESA: Bloque estructurado e integrado correctamente en el flujo visual
+    elif tipo_expediente == "Empresa":
+        rfc_empresa_busqueda = st.text_input("Ingresa el RFC o Nombre de la empresa para actualizar:")
         
         if rfc_empresa_busqueda:
             if nombre_usuario_activo in USUARIOS_MAESTROS:
                 if user_sel_tab5 == "MOSTRAR TODOS":
-                    res_emp = supabase.table("registro_empresa").select("*").eq("rfc", rfc_empresa_busqueda.upper()).execute()
+                    res_emp = supabase.table("registro_empresa").select("*").ilike("nombre_empresa", f"%{rfc_empresa_busqueda}%").execute()
                 else:
-                    res_emp = supabase.table("registro_empresa").select("*").eq("rfc", rfc_empresa_busqueda.upper()).eq("creado_por", mapa_usuarios_master[user_sel_tab5]).execute()
+                    res_emp = supabase.table("registro_empresa").select("*").ilike("nombre_empresa", f"%{rfc_empresa_busqueda}%").eq("creado_por", mapa_usuarios_master[user_sel_tab5]).execute()
             else:
-                res_emp = supabase.table("registro_empresa").select("*").eq("rfc", rfc_empresa_busqueda.upper()).eq("creado_por", usuario_id_activo).execute()
+                res_emp = supabase.table("registro_empresa").select("*").ilike("nombre_empresa", f"%{rfc_empresa_busqueda}%").eq("creado_por", usuario_id_activo).execute()
             
             if res_emp.data:
                 reg_emp = res_emp.data[0]
+                empresa_id_reg = reg_emp.get("id")
                 st.write(f"Empresa encontrada: **{reg_emp.get('nombre_empresa', 'Sin nombre')}**")
-                st.write(f"Representante Legal actual: **{reg_emp.get('representante_legal', 'No registrado')}**")
+                st.write(f"Representante Legal actual: **{reg_emp.get('nombre_rl', 'No registrado')}**")
                 st.write(f"Banco actual: **{reg_emp.get('nombre_banco', 'No registrado')}** | CLABE actual: **{reg_emp.get('clabe_interbancaria', 'No registrado')}**")
                 
                 st.write("---")
@@ -770,7 +770,7 @@ with tab5:
                 
                 with st.form("form_actualizar_empresa"):
                     nuevo_nombre_empresa = st.text_input("Nombre de la empresa:", value=reg_emp.get('nombre_empresa') or "")
-                    nuevo_rep_legal = st.text_input("Nombre del representante legal:", value=reg_emp.get('representante_legal') or "")
+                    nuevo_rep_legal = st.text_input("Nombre del representante legal:", value=reg_emp.get('nombre_rl') or "")
                     nuevo_banco_emp = st.text_input("Banco:", value=reg_emp.get('nombre_banco') or "")
                     nueva_clabe_emp = st.text_input("Cuenta CLABE:", max_chars=18, value=reg_emp.get('clabe_interbancaria') or "")
                     
@@ -782,19 +782,19 @@ with tab5:
                         elif nueva_clabe_emp and not nueva_clabe_emp.isdigit():
                             st.error("La CLABE solo debe contener números.")
                         else:
-                            supabase.table("empresas").update({
+                            supabase.table("registro_empresa").update({
                                 "nombre_empresa": nuevo_nombre_empresa,
-                                "representante_legal": nuevo_rep_legal,
+                                "nombre_rl": nuevo_rep_legal,
                                 "nombre_banco": nuevo_banco_emp,
                                 "clabe_interbancaria": nueva_clabe_emp
-                            }).eq("rfc", rfc_empresa_busqueda.upper()).execute()
+                            }).eq("id", empresa_id_reg).execute()
                             st.success("¡Datos de la empresa actualizados correctamente!")
                 
                 st.write("---")
                 st.markdown("##### 📂 Estado y Actualización de Documentación de la Empresa")
                 
                 docs_map_emp = {
-                    "INE": "url_ine",
+                    "INE": "url_ine_rl",
                     "Carátula bancaria": "url_caratula_bancaria",
                     "Comprobante de domicilio": "url_comprobante_domicilio",
                     "Constancia de Situación Fiscal": "url_constancia_fiscal"
@@ -816,14 +816,13 @@ with tab5:
                             nombre_carpeta_emp = opcion_emp_doc.lower().replace(" ", "_").replace("á", "a").replace("ó", "o").replace("í", "i")
                             ruta_storage_emp = f"empresas/{nombre_carpeta_emp}"
                             
-                            nueva_url_emp = procesar_archivo(archivo_nuevo_emp, ruta_storage_emp, rfc_empresa_busqueda.upper())
-                            supabase.table("empresas").update({col_db_emp: nueva_url_emp}).eq("rfc", rfc_empresa_busqueda.upper()).execute()
+                            nueva_url_emp = procesar_archivo(archivo_nuevo_emp, ruta_storage_emp, str(empresa_id_reg))
+                            supabase.table("registro_empresa").update({col_db_emp: nueva_url_emp}).eq("id", empresa_id_reg).execute()
                             st.success(f"¡{opcion_emp_doc} de la empresa actualizada correctamente!")
                         else:
                             st.warning("Por favor selecciona un archivo.")
             else:
-                st.error("No se encontró ninguna empresa registrada con ese RFC.")
-
+                st.error("No se encontró ninguna empresa registrada con ese criterio.")
 # ==========================================
 # PESTAÑA 6: REGISTRO DE OPERACIÓN Y DEVOLUCIONES
 # ==========================================
